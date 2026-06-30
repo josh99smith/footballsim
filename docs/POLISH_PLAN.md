@@ -24,15 +24,17 @@ Highest visual payoff; the sim already produces the data, this draws it richer.
 - Sound: whistle, crowd swell, hit / catch — behind a mute toggle, no autoplay traps.
 - Snap cadence + a brief, skippable result card (yards, tackler) between plays.
 
-## Phase 3 — Sim depth & realism ⬜
-- More playbook: screens, draws, RPOs, route-tree variety; defense Cover 4,
-  man-free, goal-line.
-- QB scrambles / designed runs; play-action keyed to run tendency.
-- Penalties (false start, holding, PI, offside) with enforcement.
-- Fatigue across drives + momentum streaks.
-- Passer rating + time of possession in the box score.
-- Situational AI playcalling (clock / score / field-zone aware; adapts to tendencies).
-- Balance tuning pass (run yards, deep completions) driven by a sim-N-games harness.
+## Phase 3 — Sim depth & realism ✅ done
+- More playbook: Draw, HB Screen, Mesh (offense); Cover 4 Quarters, Cover 0
+  Blitz, Goal Line (defense). *(RPOs/designed-QB-run left for later.)*
+- QB scrambles (from Phase 1) retained; penalties: false start, offside,
+  offensive holding, defensive pass interference — with goal-line-aware enforcement.
+- Momentum streaks feeding the AI coordinator. *(Physical stamina/fatigue: future.)*
+- Passer rating + time of possession + penalties in the box score.
+- Situational AI playcalling: two-minute hurry-up, clock-kill when leading late,
+  red-zone / goal-line tendencies, momentum nudge.
+- Balance tuning pass + committed harness (`npm run balance`): completions
+  ~64-79%, runs ~5-7 vs a base front, realistic final scores.
 
 ## Phase 4 — Game management & options ⬜
 - Settings: quarter length, difficulty, seed input (shareable games), team

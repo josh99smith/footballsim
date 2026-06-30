@@ -5,7 +5,7 @@ import {
   pickOffense,
   type Philosophy,
 } from "./sim/coordinator";
-import { DEFAULT_CONFIG, GameFlow, type CommitOutcome, type GameConfig, type GameInfo } from "./sim/game";
+import { DEFAULT_CONFIG, GameFlow, type CommitOutcome, type GameConfig, type GameInfo, type PenaltyKind } from "./sim/game";
 import { PlaySim } from "./sim/engine";
 import { RNG } from "./sim/rng";
 import { DEFAULT_TEAMS, type Team } from "./sim/roster";
@@ -139,6 +139,8 @@ export class GameController {
   private startBallOn = 25;
   private banner: Banner | null = null;
   private bannerSeq = 0;
+  // momentum per team (-1 cold .. +1 hot), feeds the AI coordinator
+  private momentum: Record<TeamId, number> = { home: 0, away: 0 };
 
   // sound cues queued for the renderer to drain & play
   private soundCues: SoundCue[] = [];
@@ -206,6 +208,7 @@ export class GameController {
     this.effects = [];
     this.banner = null;
     this.soundCues = [];
+    this.momentum = { home: 0, away: 0 };
     this.beginPlaySelection();
   }
 
@@ -422,10 +425,12 @@ export class GameController {
     const info = this.flow.info();
     const offenseIsUser = info.possession === this.userTeam;
 
+    const aiTeam: TeamId = info.possession === "home" ? "away" : "home";
+
     if (offenseIsUser) {
-      // User calls offense; AI calls defense.
+      // User calls offense; AI (defense) is the opponent of the ball carrier.
       this.callSide = "offense";
-      this.pendingHiddenCall = pickDefense(info, this.aiPhilosophy(), this.flow.rng);
+      this.pendingHiddenCall = pickDefense(info, this.aiPhilosophy(), this.flow.rng, this.momentum[aiTeam]);
       this.aiCallName = null;
       this.buildPreview(OFF_PLAYS[0].id, this.pendingHiddenCall);
     } else {
@@ -438,7 +443,7 @@ export class GameController {
         }
       }
       this.callSide = "defense";
-      this.pendingHiddenCall = pickOffense(info, this.aiPhilosophy(), this.flow.rng);
+      this.pendingHiddenCall = pickOffense(info, this.aiPhilosophy(), this.flow.rng, this.momentum[info.possession]);
       this.aiCallName = null;
       this.buildPreview(this.pendingHiddenCall, DEF_PLAYS[0].id);
     }
@@ -457,6 +462,8 @@ export class GameController {
   }
 
   private snap(offId: string, defId: string): void {
+    // Pre-snap flags (false start / offside) can wipe out the play.
+    if (this.maybePreSnapPenalty()) return;
     this.aiCallName = this.callSide === "offense"
       ? defPlayLabel(defId)
       : offPlayLabel(offId);
@@ -489,6 +496,14 @@ export class GameController {
     const result = this.sim.result;
     const offTeam = this.flow.possession;
     const defTeam = offTeam === "home" ? "away" : "home";
+
+    // Flag on the play? A post-play penalty supersedes the result, so resolve it
+    // BEFORE committing the play (which would otherwise advance down/distance).
+    if (!result.touchdown && !result.turnover) {
+      const pk = this.rollPostPlayPenalty(result);
+      if (pk) { this.applyPenaltyOutcome(pk); return; }
+    }
+
     const commit = this.flow.commitPlayResult(result);
     this.stats.recordScrimmage(
       offTeam,
@@ -499,9 +514,11 @@ export class GameController {
       this.startBallOn,
     );
     this.stats.recordScores(this.flow.score.home, this.flow.score.away);
+    this.stats.recordTop(this.flow.top.home, this.flow.top.away);
     this.lastPlayText = commit.text;
     this.logPbp(offTeam, commit.text);
     this.makeBanner(offTeam, commit, result);
+    this.updateMomentum(offTeam, commit, result);
     this.phase = "result";
     this.publish();
     // Advance to the next selection (field stays frozen on the final frame).
@@ -513,6 +530,7 @@ export class GameController {
     const commit = kind === "punt" ? this.flow.punt() : this.flow.fieldGoalAttempt();
     this.stats.recordSpecialTeams(offTeam, kind === "punt" ? "Punt" : commit.isScore ? "Field Goal" : "Missed FG");
     this.stats.recordScores(this.flow.score.home, this.flow.score.away);
+    this.stats.recordTop(this.flow.top.home, this.flow.top.away);
     this.lastPlayText = commit.text;
     this.logPbp(offTeam, commit.text);
     this.makeBanner(offTeam, commit, null);
@@ -557,6 +575,79 @@ export class GameController {
       return;
     }
     this.banner = { id: ++this.bannerSeq, ...banner };
+  }
+
+  /** Update momentum from a play's outcome (decays toward neutral). */
+  private updateMomentum(offTeam: TeamId, commit: CommitOutcome, result: PlayResult | null): void {
+    const def: TeamId = offTeam === "home" ? "away" : "home";
+    this.momentum.home *= 0.8;
+    this.momentum.away *= 0.8;
+    if (commit.isScore) {
+      this.momentum[commit.isScore.team] += 0.5;
+      this.momentum[commit.isScore.team === "home" ? "away" : "home"] -= 0.3;
+    } else if (commit.changedPossession) {
+      this.momentum[offTeam] -= 0.4;
+      this.momentum[def] += 0.4;
+    } else if (commit.firstDown || (result && result.yards >= 15)) {
+      this.momentum[offTeam] += 0.15;
+      this.momentum[def] -= 0.1;
+    } else if (result && result.yards <= 0) {
+      this.momentum[offTeam] -= 0.1;
+      this.momentum[def] += 0.08;
+    }
+    const clamp = (x: number) => Math.max(-1, Math.min(1, x));
+    this.momentum.home = clamp(this.momentum.home);
+    this.momentum.away = clamp(this.momentum.away);
+  }
+
+  // ---- penalties ----
+
+  /** Roll a pre-snap flag; if one fires, enforce it and re-open selection. */
+  private maybePreSnapPenalty(): boolean {
+    const r = this.flow.rng;
+    const tempo = this.philosophy.tempo;
+    const blitz = this.philosophy.blitzFreq;
+    if (r.chance(0.016 * (0.7 + tempo * 0.6))) { this.applyPenaltyOutcome("falseStart"); return true; }
+    if (r.chance(0.011 * (0.6 + blitz * 0.9))) { this.applyPenaltyOutcome("offside"); return true; }
+    return false;
+  }
+
+  /** Roll for a flag during the play (holding / pass interference). */
+  private rollPostPlayPenalty(result: PlayResult): PenaltyKind | null {
+    const r = this.flow.rng;
+    if (result.isPass && result.endReason === "incomplete") {
+      if (r.chance(0.06)) return "passInterference"; // DPI on the incompletion
+    }
+    if (result.endReason !== "interception" && result.yards >= 3 && r.chance(0.04)) {
+      return "holdingOff"; // offensive holding negates a positive play
+    }
+    return null;
+  }
+
+  private applyPenaltyOutcome(kind: PenaltyKind): void {
+    const pen = this.flow.applyPenalty(kind);
+    this.stats.recordPenalty(pen.penalizedTeam, pen.yards);
+    this.stats.recordScores(this.flow.score.home, this.flow.score.away);
+    this.stats.recordTop(this.flow.top.home, this.flow.top.away);
+    const titles: Record<PenaltyKind, string> = {
+      falseStart: "FALSE START",
+      offside: "OFFSIDE",
+      holdingOff: "HOLDING",
+      passInterference: "PASS INTERFERENCE",
+    };
+    this.lastPlayText = `🚩 ${pen.text}`;
+    this.logPbp(pen.penalizedTeam, `Penalty — ${pen.text}`);
+    this.banner = {
+      id: ++this.bannerSeq,
+      tone: "info",
+      title: `🚩 ${titles[kind]}`,
+      sub: `${this.teams[pen.penalizedTeam].abbr} • ${pen.yards} yds`,
+      team: pen.penalizedTeam,
+    };
+    this.soundCues.push("whistle");
+    this.phase = "result";
+    this.publish();
+    this.beginPlaySelection();
   }
 
   private logPbp(team: TeamId, text: string): void {

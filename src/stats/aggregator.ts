@@ -28,6 +28,9 @@ export interface TeamTotals {
   turnovers: number;
   sacks: number; // sacks made by this team's defense
   points: number;
+  topSeconds: number; // time of possession (seconds)
+  penalties: number;
+  penaltyYards: number;
 }
 
 export interface DriveSummary {
@@ -41,7 +44,8 @@ export interface DriveSummary {
 
 const emptyTotals = (): TeamTotals => ({
   plays: 0, totalYards: 0, passYards: 0, rushYards: 0,
-  firstDowns: 0, turnovers: 0, sacks: 0, points: 0,
+  firstDowns: 0, turnovers: 0, sacks: 0, points: 0, topSeconds: 0,
+  penalties: 0, penaltyYards: 0,
 });
 
 export class StatsAggregator {
@@ -82,6 +86,16 @@ export class StatsAggregator {
   recordScores(home: number, away: number): void {
     this.totals.home.points = home;
     this.totals.away.points = away;
+  }
+
+  recordTop(home: number, away: number): void {
+    this.totals.home.topSeconds = home;
+    this.totals.away.topSeconds = away;
+  }
+
+  recordPenalty(team: TeamId, yards: number): void {
+    this.totals[team].penalties++;
+    this.totals[team].penaltyYards += yards;
   }
 
   /** Record a completed scrimmage play. */

@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "balance": "vite-node scripts/balance.ts",
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {

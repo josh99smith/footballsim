@@ -51,6 +51,8 @@ export function StatsPanel() {
                 <Row k="First downs" v={t.firstDowns} />
                 <Row k="Turnovers" v={t.turnovers} />
                 <Row k="Sacks" v={t.sacks} />
+                <div className="tt-row"><span>Penalties</span><span>{t.penalties}-{t.penaltyYards}</span></div>
+                <div className="tt-row"><span>Time of poss.</span><span>{fmtTop(t.topSeconds)}</span></div>
               </div>
             );
           })}
@@ -75,8 +77,13 @@ export function StatsPanel() {
         {passers.length > 0 && (
           <StatTable
             title="Passing"
-            cols={["C/A", "Yds", "TD", "INT"]}
-            rows={passers.map((p) => [name22(p), `${p.pass!.comp}/${p.pass!.att}`, p.pass!.yds, p.pass!.td, p.pass!.int])}
+            cols={["C/A", "Yds", "TD", "INT", "RTG"]}
+            rows={passers.map((p) => [
+              name22(p),
+              `${p.pass!.comp}/${p.pass!.att}`,
+              p.pass!.yds, p.pass!.td, p.pass!.int,
+              passerRating(p.pass!),
+            ])}
           />
         )}
         {rushers.length > 0 && (
@@ -144,6 +151,22 @@ export function StatsPanel() {
 
 function name22(p: PlayerStats): string {
   return `#${p.number} ${p.name}`;
+}
+
+const fmtTop = (sec: number): string => {
+  const m = Math.floor(sec / 60);
+  return `${m}:${String(Math.round(sec) % 60).padStart(2, "0")}`;
+};
+
+/** Standard NFL passer rating (capped components). */
+function passerRating(p: { att: number; comp: number; yds: number; td: number; int: number }): string {
+  if (p.att === 0) return "—";
+  const cap = (x: number) => Math.max(0, Math.min(2.375, x));
+  const a = cap(((p.comp / p.att) - 0.3) * 5);
+  const b = cap(((p.yds / p.att) - 3) * 0.25);
+  const c = cap((p.td / p.att) * 20);
+  const d = cap(2.375 - (p.int / p.att) * 25);
+  return (((a + b + c + d) / 6) * 100).toFixed(1);
 }
 
 function Row({ k, v }: { k: string; v: number }) {

@@ -24,6 +24,17 @@ export interface GameInfo {
 
 export type SpecialTeams = "punt" | "fieldGoal";
 
+export type PenaltyKind =
+  | "falseStart" | "offside" | "holdingOff" | "passInterference";
+
+export interface PenaltyOutcome {
+  text: string;
+  /** Team the flag was on. */
+  penalizedTeam: TeamId;
+  yards: number;
+  firstDown: boolean;
+}
+
 export interface CommitOutcome {
   /** One-line description for the play-by-play log. */
   text: string;
@@ -34,6 +45,9 @@ export interface CommitOutcome {
 }
 
 const other = (t: TeamId): TeamId => (t === "home" ? "away" : "home");
+
+const ordinalDown = (n: number): string =>
+  n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : "4th";
 
 export class GameFlow {
   private cfg: GameConfig;
@@ -48,6 +62,8 @@ export class GameFlow {
   ballOn = 25; // after opening kickoff touchback
   score = { home: 0, away: 0 };
   gameOver = false;
+  /** Accumulated seconds of possession per team (time of possession). */
+  top = { home: 0, away: 0 };
 
   constructor(teams: { home: Team; away: Team }, rng: RNG, cfg = DEFAULT_CONFIG) {
     this.teams = teams;
@@ -120,7 +136,7 @@ export class GameFlow {
     if (result.endReason === "interception") {
       const spot = Math.round(this.ballOn + result.yards);
       this.flipPossession(spot);
-      this.runClock(result, true);
+      this.runClock(result, true, offTeam);
       return {
         text: `INTERCEPTED by ${this.teams[this.possession].abbr} at the ${this.fieldDesc(this.ballOn)}.`,
         scored: false,
@@ -142,7 +158,7 @@ export class GameFlow {
         xpGood ? "Extra point good." : "Extra point MISSED."
       }`;
       this.kickoffTo(other(offTeam));
-      this.runClock(result, true);
+      this.runClock(result, true, offTeam);
       return {
         text,
         scored: true,
@@ -156,7 +172,7 @@ export class GameFlow {
     if (newBallOn <= 0) {
       this.score[other(offTeam)] += 2;
       this.kickoffTo(offTeam); // conceding team free-kicks
-      this.runClock(result, true);
+      this.runClock(result, true, offTeam);
       return {
         text: `SAFETY! ${this.teams[other(offTeam)].abbr} take 2.`,
         scored: true,
@@ -186,7 +202,7 @@ export class GameFlow {
       }
     }
 
-    this.runClock(result, result.endReason === "incomplete" || result.endReason === "outOfBounds");
+    this.runClock(result, result.endReason === "incomplete" || result.endReason === "outOfBounds", offTeam);
 
     const text = changed
       ? `Turnover on downs. ${this.teams[this.possession].abbr} take over at the ${this.fieldDesc(this.ballOn)}.`
@@ -213,7 +229,7 @@ export class GameFlow {
     if (good) {
       this.score[offTeam] += 3;
       this.kickoffTo(other(offTeam));
-      this.runClockSeconds(6);
+      this.runClockSeconds(6, offTeam);
       return {
         text: `${fgDist}-yard field goal is GOOD. ${this.teams[offTeam].abbr} +3.`,
         scored: true,
@@ -224,7 +240,7 @@ export class GameFlow {
     }
     // Miss: opponent takes over at the spot.
     this.flipPossession(Math.max(20, 100 - this.ballOn));
-    this.runClockSeconds(6);
+    this.runClockSeconds(6, offTeam);
     return {
       text: `${fgDist}-yard field goal is NO GOOD. ${this.teams[this.possession].abbr} take over.`,
       scored: false,
@@ -235,15 +251,16 @@ export class GameFlow {
   }
 
   punt(): CommitOutcome {
+    const offTeam = this.possession;
     const net = Math.round(38 + this.rng.gaussian() * 6);
-    let spot = this.ballOn + net;
+    const spot = this.ballOn + net;
     if (spot >= 100) {
       // Touchback.
       this.flipPossession(20);
     } else {
       this.flipPossession(100 - spot);
     }
-    this.runClockSeconds(6);
+    this.runClockSeconds(6, offTeam);
     return {
       text: `Punt downed. ${this.teams[this.possession].abbr} take over at the ${this.fieldDesc(this.ballOn)}.`,
       scored: false,
@@ -251,6 +268,53 @@ export class GameFlow {
       firstDown: false,
       isScore: null,
     };
+  }
+
+  // ---- penalties ----
+
+  /** Enforce a penalty (no scrimmage play runs). Returns a description for the
+   *  log. Possession never changes; some defensive fouls grant a first down. */
+  applyPenalty(kind: PenaltyKind): PenaltyOutcome {
+    const off = this.possession;
+    const abbr = (t: TeamId) => this.teams[t].abbr;
+
+    // Half-the-distance caps so we never cross a goal line.
+    const back = (yds: number) => (this.ballOn <= yds * 2 ? Math.floor(this.ballOn / 2) : yds);
+    const fwd = (yds: number) =>
+      this.ballOn + yds >= 100 ? Math.floor((100 - this.ballOn) / 2) : yds;
+
+    if (kind === "falseStart") {
+      const y = back(5);
+      this.ballOn -= y;
+      this.distance += y;
+      return { text: `False start, ${abbr(off)}. ${y} yards, replay ${ordinalDown(this.down)} down.`, penalizedTeam: off, yards: y, firstDown: false };
+    }
+    if (kind === "holdingOff") {
+      const y = back(10);
+      this.ballOn -= y;
+      this.distance += y;
+      return { text: `Holding, ${abbr(off)}. ${y} yards, replay ${ordinalDown(this.down)} down.`, penalizedTeam: off, yards: y, firstDown: false };
+    }
+    // Defensive fouls advance the offense.
+    const def = other(off);
+    if (kind === "offside") {
+      const y = fwd(5);
+      this.ballOn += y;
+      this.distance -= y;
+      let first = false;
+      if (this.distance <= 0) { this.markFirstDown(); first = true; }
+      return { text: `Offside, ${abbr(def)}. ${y} yards${first ? ", first down" : ""}.`, penalizedTeam: def, yards: y, firstDown: first };
+    }
+    // Pass interference: spot foul + automatic first down.
+    const y = fwd(15);
+    this.ballOn += y;
+    this.markFirstDown();
+    return { text: `Pass interference, ${abbr(def)}. ${y} yards, automatic first down.`, penalizedTeam: def, yards: y, firstDown: true };
+  }
+
+  private markFirstDown(): void {
+    this.down = 1;
+    this.distance = this.isGoalToGo() ? 100 - this.ballOn : 10;
   }
 
   // ---- internal helpers ----
@@ -271,12 +335,13 @@ export class GameFlow {
     this.distance = 10;
   }
 
-  private runClock(result: PlayResult, clockStops: boolean): void {
+  private runClock(result: PlayResult, clockStops: boolean, chargeTo: TeamId): void {
     const runoff = Math.ceil(result.playTime) + (clockStops ? 0 : 25);
-    this.runClockSeconds(runoff);
+    this.runClockSeconds(runoff, chargeTo);
   }
 
-  private runClockSeconds(sec: number): void {
+  private runClockSeconds(sec: number, chargeTo: TeamId = this.possession): void {
+    this.top[chargeTo] += sec;
     this.clock -= sec;
     while (this.clock <= 0 && !this.gameOver) {
       if (this.quarter >= 4) {

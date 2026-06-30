@@ -20,6 +20,8 @@ export interface OffPlay {
   formation: string;
   blurb: string;
   roles: PlayerRole[]; // exactly 11
+  /** Tick at which a run play hands off (default 8). Larger = delayed (draw). */
+  handoffTick?: number;
 }
 
 export interface DefPlay {
@@ -215,6 +217,85 @@ export const OFF_PLAYS: OffPlay[] = [
       ...offensiveLine(),
     ],
   },
+  {
+    id: "draw",
+    name: "Draw",
+    type: "run",
+    formation: "Shotgun",
+    blurb: "Show pass, then hand it up the middle as the rush flies upfield.",
+    handoffTick: 18,
+    roles: [
+      { want: "QB", dx: -5, dy: 0, assign: { kind: "qb", dropDepth: 1 } },
+      { want: "RB", dx: -5, dy: 1.6, assign: { kind: "carry", aimGap: -0.5 } },
+      { want: "WR", dx: -0.3, dy: -17, assign: { kind: "block" } },
+      { want: "WR", dx: -0.3, dy: 17, assign: { kind: "block" } },
+      { want: "WR", dx: -0.3, dy: 9, assign: { kind: "block" } },
+      { want: "TE", dx: -0.5, dy: 4.8, assign: { kind: "block" } },
+      ...offensiveLine(),
+    ],
+  },
+  {
+    id: "hb-screen",
+    name: "HB Screen",
+    type: "pass",
+    formation: "Shotgun",
+    blurb: "Let the rush come, then dump it to the back behind a wall of blockers.",
+    roles: [
+      { want: "QB", dx: -5, dy: 0, assign: { kind: "qb", dropDepth: 2 } },
+      {
+        want: "RB",
+        dx: -4.5,
+        dy: 3,
+        assign: { kind: "runRoute", isCheckdown: true, waypoints: [{ x: -1.5, y: 5 }, { x: 2, y: 9 }] },
+      },
+      { want: "WR", dx: -0.3, dy: -17, assign: { kind: "runRoute", waypoints: [{ x: 6, y: 0 }, { x: 14, y: -2 }] } },
+      { want: "WR", dx: -0.3, dy: 17, assign: { kind: "block" } }, // screen blocker
+      { want: "WR", dx: -0.3, dy: 9, assign: { kind: "block" } }, // screen blocker
+      { want: "TE", dx: -0.5, dy: 4.8, assign: { kind: "block" } },
+      ...offensiveLine(),
+    ],
+  },
+  {
+    id: "mesh",
+    name: "Mesh",
+    type: "pass",
+    formation: "Shotgun",
+    blurb: "Crossing routes underneath rub off defenders. A man-coverage killer.",
+    roles: [
+      { want: "QB", dx: -5, dy: 0, assign: { kind: "qb", dropDepth: 2.5 } },
+      {
+        want: "RB",
+        dx: -5,
+        dy: -2.5,
+        assign: { kind: "runRoute", isCheckdown: true, waypoints: [{ x: 2, y: -6 }] },
+      },
+      {
+        want: "WR",
+        dx: -0.3,
+        dy: -17,
+        assign: { kind: "runRoute", waypoints: [{ x: 4, y: 0 }, { x: 7, y: 22 }] }, // shallow cross L->R
+      },
+      {
+        want: "WR",
+        dx: -0.3,
+        dy: 17,
+        assign: { kind: "runRoute", waypoints: [{ x: 4, y: 0 }, { x: 7, y: -22 }] }, // shallow cross R->L
+      },
+      {
+        want: "WR",
+        dx: -0.3,
+        dy: 9,
+        assign: { kind: "runRoute", waypoints: [{ x: 14, y: 0 }, { x: 26, y: -2 }] }, // deep dig clearout
+      },
+      {
+        want: "TE",
+        dx: -0.5,
+        dy: 4.8,
+        assign: { kind: "runRoute", waypoints: [{ x: 10, y: 1 }] }, // sit-down
+      },
+      ...offensiveLine(),
+    ],
+  },
 ];
 
 // ---- Defensive plays --------------------------------------------------------
@@ -299,6 +380,60 @@ export const DEF_PLAYS: DefPlay[] = [
       { want: "CB", dx: 3, dy: 8, assign: { kind: "coverMan" } as Assignment }, // nickel
       { want: "S", dx: 5, dy: -6, assign: { kind: "coverMan" } as Assignment },
       { want: "S", dx: 14, dy: 0, assign: { kind: "coverZone", center: { x: 26, y: 0 }, radius: 15 } },
+    ],
+  },
+  {
+    id: "cover4-quarters",
+    name: "Cover 4 Quarters",
+    type: "coverage",
+    formation: "4-3",
+    blurb: "Four deep, keep everything in front. Bend but don't break.",
+    roles: [
+      ...fourManFront(),
+      { want: "LB", dx: 4.5, dy: -5, assign: { kind: "coverZone", center: { x: 6, y: -8 }, radius: 7 } },
+      { want: "LB", dx: 4.5, dy: 0, assign: { kind: "coverZone", center: { x: 6, y: 0 }, radius: 7 } },
+      { want: "LB", dx: 4.5, dy: 5, assign: { kind: "coverZone", center: { x: 6, y: 8 }, radius: 7 } },
+      { want: "CB", dx: 8, dy: -16, assign: { kind: "coverZone", center: { x: 24, y: -17 }, radius: 11 } },
+      { want: "CB", dx: 8, dy: 16, assign: { kind: "coverZone", center: { x: 24, y: 17 }, radius: 11 } },
+      { want: "S", dx: 12, dy: -7, assign: { kind: "coverZone", center: { x: 24, y: -6 }, radius: 11 } },
+      { want: "S", dx: 12, dy: 7, assign: { kind: "coverZone", center: { x: 24, y: 6 }, radius: 11 } },
+    ],
+  },
+  {
+    id: "cover0-blitz",
+    name: "Cover 0 Blitz",
+    type: "blitz",
+    formation: "Bear",
+    blurb: "Everyone comes. Man across, no safety help. Boom or bust.",
+    roles: [
+      ...fourManFront(),
+      { want: "LB", dx: 3.5, dy: -3, assign: { kind: "rush", lane: -4 } }, // blitz
+      { want: "LB", dx: 3.5, dy: 3, assign: { kind: "rush", lane: 4 } }, // blitz
+      { want: "LB", dx: 4.5, dy: 0, assign: { kind: "coverMan" } as Assignment },
+      { want: "CB", dx: 2, dy: -16, assign: { kind: "coverMan" } as Assignment },
+      { want: "CB", dx: 2, dy: 16, assign: { kind: "coverMan" } as Assignment },
+      { want: "S", dx: 4, dy: 8, assign: { kind: "coverMan" } as Assignment },
+      { want: "S", dx: 4, dy: -6, assign: { kind: "coverMan" } as Assignment },
+    ],
+  },
+  {
+    id: "goal-line",
+    name: "Goal Line",
+    type: "base",
+    formation: "Goal Line",
+    blurb: "Stack the box, sell out to stop the run at the line.",
+    roles: [
+      { want: "DL", dx: 1, dy: -3, assign: { kind: "rush", lane: -3 } },
+      { want: "DL", dx: 1, dy: -1, assign: { kind: "rush", lane: -1 } },
+      { want: "DL", dx: 1, dy: 1, assign: { kind: "rush", lane: 1 } },
+      { want: "DL", dx: 1, dy: 3, assign: { kind: "rush", lane: 3 } },
+      { want: "LB", dx: 2.5, dy: -1.5, assign: { kind: "rush", lane: -2 } },
+      { want: "LB", dx: 2.5, dy: 1.5, assign: { kind: "rush", lane: 2 } },
+      { want: "LB", dx: 3.5, dy: 5, assign: { kind: "coverMan" } as Assignment },
+      { want: "CB", dx: 4, dy: -14, assign: { kind: "coverMan" } as Assignment },
+      { want: "CB", dx: 4, dy: 14, assign: { kind: "coverMan" } as Assignment },
+      { want: "S", dx: 4, dy: -5, assign: { kind: "coverMan" } as Assignment },
+      { want: "S", dx: 6, dy: 0, assign: { kind: "spy" } as Assignment },
     ],
   },
 ];

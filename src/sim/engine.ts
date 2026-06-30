@@ -79,6 +79,7 @@ export class PlaySim {
   // pass-phase state
   private handoffDone = false;
   private handoffTick = 99999;
+  private handoffAt = 8; // tick the run hands off (delayed for draws)
   private thrown = false;
   private throwTargetId: string | null = null;
   private throwFrom: Vec2 | null = null;
@@ -95,6 +96,7 @@ export class PlaySim {
     this.setup = setup;
     this.rng = setup.rng;
     this.isPass = setup.offPlay.type === "pass";
+    this.handoffAt = setup.offPlay.handoffTick ?? 8;
     this.buildAgents();
     this.qbId = this.agents.find((a) => a.assignment.kind === "qb")?.id ?? this.agents[0].id;
     this.passerId = this.qbId;
@@ -243,8 +245,8 @@ export class PlaySim {
 
     if (this.tick === 0) this.emit({ t: "snap" });
 
-    // Run-play handoff happens a few ticks after the snap.
-    if (!this.isPass && !this.handoffDone && this.tick >= 8 && this.rbId) {
+    // Run-play handoff happens a few ticks after the snap (later for draws).
+    if (!this.isPass && !this.handoffDone && this.tick >= this.handoffAt && this.rbId) {
       this.doHandoff(this.rbId);
     }
 
@@ -279,7 +281,7 @@ export class PlaySim {
     if (this.scrambling) return true;
     const c = this.carrier();
     if (!c || c.id === this.qbId) return false;
-    return this.tick > this.handoffTick + 15;
+    return this.tick > this.handoffTick + 19;
   }
 
   // ---- offense behaviour ----
@@ -324,14 +326,16 @@ export class PlaySim {
       lateral = Math.sign(away || 1) * (6 - d) * 0.55;
     }
     let target: Vec2;
+    let burst = 1;
     if (a.pos.x < 0.5) {
       // Aim for the designed gap, but slide off the nearest defender.
       target = v(a.pos.x + 6, clamp(aim + lateral * 0.6, 2, FIELD.WIDTH - 2));
     } else {
-      // Past the line: find daylight downfield.
+      // Past the line: find daylight downfield, hit it with a burst.
       target = v(a.pos.x + 9, clamp(a.pos.y + lateral, 2, FIELD.WIDTH - 2));
+      burst = 1.06;
     }
-    steer(a, target, 1);
+    steer(a, target, burst);
   }
 
   private byCarryAssign(a: Agent): { aimGap: number } | null {
@@ -705,7 +709,7 @@ export class PlaySim {
     // and only when he's closer to the ball than the receiver).
     if (contested && nearestDef.agent && dDef < dRec) {
       const closeness = clamp(1 - dDef / 2.0, 0, 1);
-      const intProb = 0.02 + closeness * (nearestDef.agent.ratings.awareness / 100) * 0.07;
+      const intProb = 0.015 + closeness * (nearestDef.agent.ratings.awareness / 100) * 0.055;
       if (this.rng.chance(intProb)) {
         this.emit({ t: "interception", by: nearestDef.agent.id, from: this.passerId ?? this.qbId });
         this.finish("interception", {
@@ -811,7 +815,7 @@ export class PlaySim {
       // Tackle vs break-tackle contest.
       const tackle = def.ratings.tackling + def.ratings.strength;
       const elude = carrier.ratings.strength + carrier.ratings.agility;
-      const breakProb = clamp(0.17 + (elude - tackle) / 520, 0.04, 0.5);
+      const breakProb = clamp(0.2 + (elude - tackle) / 500, 0.04, 0.55);
       if (this.rng.chance(breakProb)) {
         def.beatBlock = true;
         def.blockedUntil = this.tick + 14;
