@@ -2,6 +2,9 @@ import { create } from "zustand";
 import { GameController, type GameSetup, type Speed, type UIState } from "../controller";
 import type { Philosophy } from "../sim/coordinator";
 import { DEFAULT_CONFIG } from "../sim/game";
+import {
+  addRecent, clearSavedGame, decodeCode, encodeCode, loadGame, saveGame,
+} from "./persistence";
 
 const INITIAL_SEED = 0x5eed1234;
 
@@ -20,6 +23,9 @@ interface StoreState extends UIState {
   setPhilosophy: (p: Partial<Philosophy>) => void;
   startGame: (setup: GameSetup) => void;
   newGame: () => void;
+  resume: () => void;
+  loadCode: (code: string) => boolean;
+  shareCode: () => string;
 }
 
 function initial(): UIState {
@@ -55,9 +61,35 @@ export const useGame = create<StoreState>(() => ({
   setPhilosophy: (p) => controller.setPhilosophy(p),
   startGame: (setup) => controller.startGame(setup),
   newGame: () => controller.reset(),
+  resume: () => { const sv = loadGame(); if (sv) controller.replay(sv); },
+  loadCode: (code) => {
+    const sv = decodeCode(code);
+    if (!sv) return false;
+    controller.replay(sv);
+    return true;
+  },
+  shareCode: () => { const sv = controller.getSave(); return sv ? encodeCode(sv) : ""; },
 }));
 
-// Wire controller -> store. Discrete updates only (not per-frame motion).
+// Wire controller -> store. Discrete updates mirror to React and drive autosave.
+let recordedOver = false;
 controller.onChange((s: UIState) => {
   useGame.setState(s);
+  if (s.phase === "gameOver") {
+    if (!recordedOver) {
+      recordedOver = true;
+      addRecent({
+        homeAbbr: s.homeAbbr, awayAbbr: s.awayAbbr,
+        homeScore: s.info.score.home, awayScore: s.info.score.away,
+        seed: s.seed, when: Date.now(),
+      });
+      clearSavedGame(); // a finished game isn't resumable
+    }
+  } else {
+    recordedOver = false;
+    if (s.phase !== "setup") {
+      const sv = controller.getSave();
+      if (sv) saveGame(sv);
+    }
+  }
 });

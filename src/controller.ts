@@ -32,6 +32,19 @@ export interface GameSetup {
   away: { name: string; abbr: string; color: string };
 }
 
+/** A recorded user action. Replaying these from the setup reconstructs the
+ *  exact game (the sim + AI are deterministic given the seed). */
+export interface GameInput {
+  t: "off" | "def" | "st" | "convert" | "clock" | "timeout";
+  v?: string;
+}
+
+export interface GameSave {
+  version: 1;
+  setup: GameSetup;
+  inputs: GameInput[];
+}
+
 export interface PbpEntry {
   quarter: number;
   clock: number;
@@ -148,6 +161,10 @@ export class GameController {
   private difficulty: Difficulty = "normal";
   private lastQuarter = 1;
   private twoMinShown = false;
+  // replay / persistence
+  private setup: GameSetup | null = null;
+  private inputs: GameInput[] = [];
+  private replaying = false;
 
   private pendingHiddenCall: string | null = null; // AI's call for the hidden side
   private callSide: "offense" | "defense" | null = null;
@@ -194,6 +211,8 @@ export class GameController {
 
   /** Apply a setup config and kick off a fresh game. */
   startGame(setup: GameSetup): void {
+    this.setup = { ...setup, home: { ...setup.home }, away: { ...setup.away } };
+    this.inputs = [];
     this.seed = setup.seed >>> 0;
     this.cfg = { quarterSeconds: setup.quarterSeconds };
     this.difficulty = setup.difficulty;
@@ -258,31 +277,71 @@ export class GameController {
   // user picks
   userPickOffense(id: string): void {
     if (this.callSide !== "offense" || this.phase !== "preSnap") return;
+    this.record({ t: "off", v: id });
     this.snap(id, this.pendingHiddenCall ?? DEF_PLAYS[0].id);
   }
   userPickDefense(id: string): void {
     if (this.callSide !== "defense" || this.phase !== "preSnap") return;
+    this.record({ t: "def", v: id });
     this.snap(this.pendingHiddenCall ?? OFF_PLAYS[0].id, id);
   }
   userSpecialTeams(kind: "punt" | "fieldGoal"): void {
     if (this.phase !== "preSnap") return;
+    this.record({ t: "st", v: kind });
     this.resolveSpecialTeams(kind);
   }
   userClockPlay(kind: "kneel" | "spike"): void {
     if (this.phase !== "preSnap" || this.callSide !== "offense") return;
+    this.record({ t: "clock", v: kind });
     const commit = kind === "kneel" ? this.flow.kneel() : this.flow.spike();
     this.afterDiscretePlay(this.userTeam, commit, kind === "kneel" ? "Kneel" : "Spike");
   }
   userTimeout(): void {
     if (this.phase !== "preSnap") return;
     if (!this.flow.useTimeout(this.userTeam)) return;
+    this.record({ t: "timeout" });
     this.lastPlayText = `${this.teams[this.userTeam].abbr} timeout.`;
     this.logPbp(this.userTeam, `${this.teams[this.userTeam].abbr} call timeout (${this.flow.timeouts[this.userTeam]} left).`);
     this.publish();
   }
   userConvert(kind: "xp" | "two"): void {
     if (this.phase !== "conversion") return;
+    this.record({ t: "convert", v: kind });
     this.resolveConversionOutcome(kind);
+  }
+
+  private record(input: GameInput): void {
+    if (!this.replaying) this.inputs.push(input);
+  }
+
+  // ---- persistence & replay ----
+
+  getSave(): GameSave | null {
+    return this.setup ? { version: 1, setup: this.setup, inputs: [...this.inputs] } : null;
+  }
+
+  /** Rebuild a game from a save by replaying the recorded inputs. */
+  replay(save: GameSave): void {
+    const prevSpeed = this.speed;
+    this.replaying = true;
+    this.startGame(save.setup);
+    this.speed = "instant"; // resolve each play synchronously
+    for (const inp of save.inputs) {
+      switch (inp.t) {
+        case "off": this.userPickOffense(inp.v!); break;
+        case "def": this.userPickDefense(inp.v!); break;
+        case "st": this.userSpecialTeams(inp.v as "punt" | "fieldGoal"); break;
+        case "clock": this.userClockPlay(inp.v as "kneel" | "spike"); break;
+        case "timeout": this.userTimeout(); break;
+        case "convert": this.userConvert(inp.v as "xp" | "two"); break;
+      }
+      if (this.flow.gameOver) break;
+    }
+    this.replaying = false;
+    this.inputs = [...save.inputs];
+    this.setup = { ...save.setup, home: { ...save.setup.home }, away: { ...save.setup.away } };
+    this.speed = prevSpeed;
+    this.publish();
   }
 
   // ---- per-frame driving (called by the renderer's rAF loop) ----

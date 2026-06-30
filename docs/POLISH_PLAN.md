@@ -44,9 +44,11 @@ Highest visual payoff; the sim already produces the data, this draws it richer.
   refactor for low payoff.)*
 - Halftime summary banner; end-of-game stat leaders (pass / rush / rec).
 
-## Phase 5 — Persistence & replay ⬜
-- localStorage save / resume; recent results.
-- Replay a seed; export / share a game code (toward the franchise layer).
+## Phase 5 — Persistence & replay ✅ done
+- localStorage autosave / resume (records the user's input log; replays it
+  deterministically from the seed). Recent results on the setup screen.
+- Shareable game codes (base64 of setup + inputs): copy in-game (⤴), paste on
+  the setup screen to replay the exact game.
 
 ## Phase 6 — Quality, a11y & performance ⬜
 - Keyboard controls, focus / ARIA, `prefers-reduced-motion`.

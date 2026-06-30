@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { controller, useGame } from "../store/gameStore";
 import type { Difficulty, GameSetup } from "../controller";
+import { getRecents, loadGame } from "../store/persistence";
 
 const QUARTERS: { label: string; sec: number }[] = [
   { label: "3 min", sec: 180 },
@@ -16,7 +17,14 @@ const DIFFICULTIES: { id: Difficulty; label: string; note: string }[] = [
 
 export function SetupScreen() {
   const startGame = useGame((s) => s.startGame);
+  const resume = useGame((s) => s.resume);
+  const loadCode = useGame((s) => s.loadCode);
   const [setup, setSetup] = useState<GameSetup>(() => controller.currentSetup());
+  const [saved] = useState(() => loadGame());
+  const [recents] = useState(() => getRecents());
+  const [code, setCode] = useState("");
+  const [showImport, setShowImport] = useState(false);
+  const [codeError, setCodeError] = useState(false);
 
   const patch = (p: Partial<GameSetup>) => setSetup((s) => ({ ...s, ...p }));
   const patchTeam = (side: "home" | "away", p: Partial<GameSetup["home"]>) =>
@@ -27,6 +35,13 @@ export function SetupScreen() {
       <div className="setup-card panel">
         <h2>New Game</h2>
         <p className="setup-tagline">You coach the home team. Set the matchup and kick off.</p>
+
+        {saved && saved.inputs.length > 0 && (
+          <button className="resume-btn" onClick={resume}>
+            ↩ Resume game in progress
+            <span className="resume-sub">{saved.setup.home.abbr} vs {saved.setup.away.abbr} · {saved.inputs.length} plays in</span>
+          </button>
+        )}
 
         <div className="setup-section">
           <label className="setup-label">Quarter length</label>
@@ -109,6 +124,42 @@ export function SetupScreen() {
         <button className="primary big" onClick={() => startGame(setup)}>
           Kickoff →
         </button>
+
+        <div className="setup-extra">
+          <button className="link-btn" onClick={() => setShowImport((v) => !v)}>
+            {showImport ? "Hide" : "Load a shared game code"}
+          </button>
+          {showImport && (
+            <div className="setup-field-row">
+              <input
+                className="setup-input"
+                style={{ flex: 1 }}
+                value={code}
+                onChange={(e) => { setCode(e.target.value); setCodeError(false); }}
+                placeholder="Paste game code…"
+              />
+              <button
+                className="chip"
+                onClick={() => { if (!loadCode(code)) setCodeError(true); }}
+              >
+                Load
+              </button>
+            </div>
+          )}
+          {codeError && <p className="setup-hint err">That code couldn't be read.</p>}
+        </div>
+
+        {recents.length > 0 && (
+          <div className="recents">
+            <h3>Recent results</h3>
+            {recents.map((r, i) => (
+              <div key={i} className="recent-row">
+                <span>{r.awayAbbr} {r.awayScore} @ {r.homeAbbr} {r.homeScore}</span>
+                <span className="recent-seed">seed {r.seed}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

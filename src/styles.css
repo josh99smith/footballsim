@@ -228,6 +228,19 @@ input[type="range"] {
 .setup-input.seed { flex: 1; }
 .setup-color { width: 44px; height: 40px; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); cursor: pointer; }
 .setup-hint { margin: 6px 0 0; font-size: 11px; color: var(--muted); }
+.setup-hint.err { color: #eb5a46; }
+.resume-btn {
+  display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left;
+  background: #16321f; border: 1px solid #2e6b41; color: #cdeccf;
+  padding: 12px 14px; border-radius: 10px; cursor: pointer; margin-bottom: 16px; font-weight: 600;
+}
+.resume-sub { font-size: 11px; color: #8fbf99; font-weight: 400; }
+.setup-extra { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.link-btn { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 13px; padding: 0; }
+.recents { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.recents h3 { font-size: 13px; margin: 0 0 6px; color: var(--muted); }
+.recent-row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; }
+.recent-seed { color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* ---- conversion ---- */
 .conv-row { display: flex; gap: 10px; margin: 12px 0; }
