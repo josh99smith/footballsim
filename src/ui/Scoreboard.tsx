@@ -13,12 +13,13 @@ const qtrLabel = (q: number): string => (q > 4 ? "OT" : `${ordinal(q)} Qtr`);
 
 export function Scoreboard() {
   const s = useGame();
-  const ballDesc = s.info.ballOn < 50
-    ? `OWN ${s.info.ballOn}`
-    : s.info.ballOn > 50
-      ? `OPP ${100 - s.info.ballOn}`
+  const ballOn = Math.round(s.info.ballOn);
+  const ballDesc = ballOn < 50
+    ? `OWN ${ballOn}`
+    : ballOn > 50
+      ? `OPP ${100 - ballOn}`
       : "50";
-  const dd = s.info.distance >= 100 - s.info.ballOn ? "& Goal" : `& ${s.info.distance}`;
+  const dd = s.info.distance >= 100 - ballOn ? "& Goal" : `& ${Math.round(s.info.distance)}`;
 
   return (
     <div className="scoreboard">

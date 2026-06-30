@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { controller } from "../store/gameStore";
+import { controller, useGame } from "../store/gameStore";
 import { drawField } from "../render/field";
 import { sound } from "../audio/sound";
 
@@ -28,15 +28,17 @@ export function FieldCanvas() {
       canvas.style.height = `${rect.height}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
+    // Redraw is needed on resize and whenever discrete state changes; between
+    // plays the scene is static, so we idle instead of repainting at 60fps.
+    let dirty = true;
+    const markDirty = () => { dirty = true; };
     resize();
-    const ro = new ResizeObserver(resize);
+    markDirty();
+    const ro = new ResizeObserver(() => { resize(); markDirty(); });
     ro.observe(wrap);
+    const unsub = useGame.subscribe(markDirty);
 
-    const loop = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
-      controller.advance(dt);
-      for (const cue of controller.takeSoundCues()) sound.play(cue);
+    const draw = () => {
       const frame = controller.renderFrame();
       const rect = wrap.getBoundingClientRect();
       drawField(ctx, rect.width, rect.height, frame, {
@@ -45,6 +47,17 @@ export function FieldCanvas() {
         homeEndzone: withAlpha(frame?.homeColor ?? "#2e6fdb", 0.55),
         awayEndzone: withAlpha(frame?.awayColor ?? "#d94a3d", 0.55),
       });
+    };
+
+    const loop = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      controller.advance(dt);
+      for (const cue of controller.takeSoundCues()) sound.play(cue);
+      if (controller.needsContinuousRender() || dirty) {
+        draw();
+        dirty = false;
+      }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -52,11 +65,17 @@ export function FieldCanvas() {
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      unsub();
     };
   }, []);
 
   return (
-    <div className="field-wrap" ref={wrapRef}>
+    <div
+      className="field-wrap"
+      ref={wrapRef}
+      role="img"
+      aria-label="2D football field showing the current play"
+    >
       <canvas ref={canvasRef} />
     </div>
   );

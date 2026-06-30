@@ -152,6 +152,18 @@ input[type="range"] {
 .log-icon { font-size: 15px; flex: none; animation: log-pop 0.3s ease; }
 .log-text { font-size: 13px; flex: 1; animation: log-slide 0.35s ease; }
 .log-aside { color: var(--muted); font-size: 12px; flex: none; }
+
+.keys-hint { margin: 2px 2px 0; font-size: 11px; color: var(--muted); line-height: 1.5; }
+.keys-hint b { color: var(--text); font-weight: 600; }
+@media (max-width: 560px) { .keys-hint { display: none; } }
+
+/* Visible keyboard focus everywhere. */
+:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; border-radius: 6px; }
+
+/* Respect reduced-motion: drop the flourish animations (gameplay motion stays). */
+@media (prefers-reduced-motion: reduce) {
+  .banner, .banner-score, .log-icon, .log-text, .status-dot { animation: none !important; }
+}
 @keyframes log-pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes log-slide { from { transform: translateX(8px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 

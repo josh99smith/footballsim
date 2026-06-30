@@ -411,6 +411,12 @@ export class GameController {
     }
   }
 
+  /** True while the field needs continuous redraw (motion in flight). When
+   *  false, the renderer can idle and skip redraws to save power. */
+  needsContinuousRender(): boolean {
+    return this.live || this.holdRemaining > 0 || this.effects.length > 0;
+  }
+
   /** Drained by the renderer each frame; returns and clears queued sound cues. */
   takeSoundCues(): SoundCue[] {
     if (this.soundCues.length === 0) return [];

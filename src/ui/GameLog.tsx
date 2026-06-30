@@ -23,7 +23,7 @@ export function GameLog() {
   const text = lastPlayText || "Kickoff. Game on.";
 
   return (
-    <div className="game-log">
+    <div className="game-log" role="status" aria-live="polite">
       <span className="log-tag">PLAY</span>
       <span className="log-icon" key={text}>{iconFor(text)}</span>
       <span className="log-text" key={`t-${text}`}>{text}</span>

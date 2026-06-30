@@ -157,7 +157,9 @@ export class GameFlow {
       };
     }
 
-    let newBallOn = this.ballOn + result.yards;
+    // Field position is whole yards (stats round the same way).
+    const gain = Math.round(result.yards);
+    const newBallOn = this.ballOn + gain;
 
     // Touchdown — the extra-point / two-point try is resolved separately so the
     // coach can choose. No kickoff until the conversion is done.
@@ -189,8 +191,7 @@ export class GameFlow {
     }
 
     this.ballOn = newBallOn;
-    const gained = result.yards;
-    const gotFirst = gained >= this.distance;
+    const gotFirst = gain >= this.distance;
     let changed = false;
     let firstDown = false;
 
@@ -200,7 +201,7 @@ export class GameFlow {
       firstDown = true;
     } else {
       this.down++;
-      this.distance -= gained;
+      this.distance -= gain;
       if (this.down > 4) {
         // Turnover on downs.
         this.flipPossession(100 - Math.round(this.ballOn));

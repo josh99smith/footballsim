@@ -6,6 +6,7 @@ import { StatsPanel } from "./ui/StatsPanel";
 import { GameLog } from "./ui/GameLog";
 import { Banner } from "./ui/Banner";
 import { SetupScreen } from "./ui/SetupScreen";
+import { KeyboardControls } from "./ui/KeyboardControls";
 import { useGame } from "./store/gameStore";
 
 export default function App() {
@@ -27,6 +28,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <KeyboardControls />
       <header className="app-header">
         <h1>Gridiron Coach</h1>
         <span className="matchup">{awayName} @ {homeName}</span>
@@ -46,6 +48,10 @@ export default function App() {
           </div>
           <GameLog />
           <SpeedControls />
+          <p className="keys-hint">
+            Keys: <b>1–9</b> pick play · <b>Space</b> pause · <b>←/→</b> speed ·
+            <b> I</b> instant · <b>P</b> punt · <b>G</b> FG · <b>K</b> kneel · <b>T</b> timeout · <b>M</b> mute
+          </p>
         </section>
 
         <aside className="right-col">

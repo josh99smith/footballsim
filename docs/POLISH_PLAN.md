@@ -50,12 +50,20 @@ Highest visual payoff; the sim already produces the data, this draws it richer.
 - Shareable game codes (base64 of setup + inputs): copy in-game (⤴), paste on
   the setup screen to replay the exact game.
 
-## Phase 6 — Quality, a11y & performance ⬜
-- Keyboard controls, focus / ARIA, `prefers-reduced-motion`.
-- Determinism regression tests (golden box scores per seed); more sim unit tests.
-- Render performance (dirty-rect / lower-power mobile mode).
+## Phase 6 — Quality, a11y & performance ✅ done
+- Full keyboard controls (1–9 pick play, Space pause, ←/→ speed, I instant,
+  P/G/K/S/T special-teams & clock, X/2 conversion, M mute) + an on-screen hint.
+- A11y: ARIA-live play-by-play ticker, labelled field + icon buttons,
+  visible `:focus-visible` outlines, `prefers-reduced-motion` honored.
+- Golden determinism regression tests (pinned box scores per seed) +
+  replay-determinism tests.
+- Idle-redraw perf: the field repaints continuously only while motion is in
+  flight; between plays it idles instead of running at 60fps.
+- Bonus: field position is now integer yards (fixed a float-display artifact).
 
 ---
 
 ### Working agreement
 Build one phase at a time, push, and check in before starting the next.
+
+All six phases complete. 🏈
