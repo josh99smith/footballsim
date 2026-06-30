@@ -20,6 +20,9 @@ export interface GameInfo {
   ballOn: number; // yards from the possessing team's own goal (0..100)
   score: { home: number; away: number };
   gameOver: boolean;
+  timeouts: { home: number; away: number };
+  /** Team that just scored a TD and owes an extra-point / two-point try. */
+  pendingConversion: TeamId | null;
 }
 
 export type SpecialTeams = "punt" | "fieldGoal";
@@ -41,7 +44,7 @@ export interface CommitOutcome {
   scored: boolean;
   changedPossession: boolean;
   firstDown: boolean;
-  isScore: { type: "TD" | "FG" | "SAFETY" | "XP"; team: TeamId } | null;
+  isScore: { type: "TD" | "FG" | "SAFETY" | "XP" | "TWO"; team: TeamId } | null;
 }
 
 const other = (t: TeamId): TeamId => (t === "home" ? "away" : "home");
@@ -64,6 +67,12 @@ export class GameFlow {
   gameOver = false;
   /** Accumulated seconds of possession per team (time of possession). */
   top = { home: 0, away: 0 };
+  timeouts = { home: 3, away: 3 };
+  pendingConversion: TeamId | null = null;
+  /** Set when a timeout/spike should stop the clock on the next play. */
+  private clockStopNext = false;
+  /** True once the two-minute warning has fired this half. */
+  twoMinuteFired = false;
 
   constructor(teams: { home: Team; away: Team }, rng: RNG, cfg = DEFAULT_CONFIG) {
     this.teams = teams;
@@ -84,6 +93,8 @@ export class GameFlow {
       ballOn: this.ballOn,
       score: { ...this.score },
       gameOver: this.gameOver,
+      timeouts: { ...this.timeouts },
+      pendingConversion: this.pendingConversion,
     };
   }
 
@@ -148,21 +159,16 @@ export class GameFlow {
 
     let newBallOn = this.ballOn + result.yards;
 
-    // Touchdown.
+    // Touchdown — the extra-point / two-point try is resolved separately so the
+    // coach can choose. No kickoff until the conversion is done.
     if (result.touchdown || newBallOn >= 100) {
       this.score[offTeam] += 6;
-      // Automatic extra point (high probability).
-      const xpGood = this.rng.chance(0.94);
-      if (xpGood) this.score[offTeam] += 1;
-      const text = `TOUCHDOWN ${this.teams[offTeam].abbr}! ${
-        xpGood ? "Extra point good." : "Extra point MISSED."
-      }`;
-      this.kickoffTo(other(offTeam));
+      this.pendingConversion = offTeam;
       this.runClock(result, true, offTeam);
       return {
-        text,
+        text: `TOUCHDOWN ${this.teams[offTeam].abbr}!`,
         scored: true,
-        changedPossession: true,
+        changedPossession: false,
         firstDown: false,
         isScore: { type: "TD", team: offTeam },
       };
@@ -270,6 +276,64 @@ export class GameFlow {
     };
   }
 
+  // ---- conversions & clock management ----
+
+  /** Resolve the extra-point or two-point try owed after a touchdown. */
+  resolveConversion(kind: "xp" | "two"): CommitOutcome {
+    const team = this.pendingConversion!;
+    const abbr = this.teams[team].abbr;
+    this.pendingConversion = null;
+    let text: string;
+    let isScore: CommitOutcome["isScore"] = null;
+    if (kind === "two") {
+      const good = this.rng.chance(0.47);
+      if (good) { this.score[team] += 2; isScore = { type: "TWO", team }; }
+      text = good ? `Two-point conversion GOOD. ${abbr} +2.` : `Two-point try NO GOOD.`;
+    } else {
+      const good = this.rng.chance(0.94);
+      if (good) { this.score[team] += 1; isScore = { type: "XP", team }; }
+      text = good ? `Extra point good.` : `Extra point MISSED.`;
+    }
+    this.kickoffTo(other(team));
+    return { text, scored: !!isScore, changedPossession: true, firstDown: false, isScore };
+  }
+
+  /** Victory-formation kneel: burns clock, loses a yard, advances the down. */
+  kneel(): CommitOutcome {
+    const offTeam = this.possession;
+    this.ballOn = Math.max(1, this.ballOn - 1);
+    this.down++;
+    this.distance += 1;
+    let changed = false;
+    if (this.down > 4) { this.flipPossession(100 - Math.round(this.ballOn)); changed = true; }
+    this.chargeClock(offTeam, 40);
+    return {
+      text: changed ? `${this.teams[offTeam].abbr} kneel. Turnover on downs.` : `${this.teams[offTeam].abbr} take a knee.`,
+      scored: false, changedPossession: changed, firstDown: false, isScore: null,
+    };
+  }
+
+  /** Spike to stop the clock: incomplete, costs a down, minimal time. */
+  spike(): CommitOutcome {
+    const offTeam = this.possession;
+    this.down++;
+    let changed = false;
+    if (this.down > 4) { this.flipPossession(100 - Math.round(this.ballOn)); changed = true; }
+    this.chargeClock(offTeam, 2);
+    return {
+      text: changed ? `${this.teams[offTeam].abbr} spike. Turnover on downs.` : `${this.teams[offTeam].abbr} spike the ball to stop the clock.`,
+      scored: false, changedPossession: changed, firstDown: false, isScore: null,
+    };
+  }
+
+  /** Call a timeout for a team; stops the clock on the next play. */
+  useTimeout(team: TeamId): boolean {
+    if (this.timeouts[team] <= 0) return false;
+    this.timeouts[team]--;
+    this.clockStopNext = true;
+    return true;
+  }
+
   // ---- penalties ----
 
   /** Enforce a penalty (no scrimmage play runs). Returns a description for the
@@ -336,13 +400,23 @@ export class GameFlow {
   }
 
   private runClock(result: PlayResult, clockStops: boolean, chargeTo: TeamId): void {
-    const runoff = Math.ceil(result.playTime) + (clockStops ? 0 : 25);
+    const stops = clockStops || this.clockStopNext;
+    this.clockStopNext = false;
+    const runoff = Math.ceil(result.playTime) + (stops ? 0 : 25);
     this.runClockSeconds(runoff, chargeTo);
+  }
+
+  private chargeClock(team: TeamId, sec: number): void {
+    this.runClockSeconds(sec, team);
   }
 
   private runClockSeconds(sec: number, chargeTo: TeamId = this.possession): void {
     this.top[chargeTo] += sec;
     this.clock -= sec;
+    // Two-minute warning (end of 2nd & 4th quarters).
+    if ((this.quarter === 2 || this.quarter === 4) && this.clock <= 120 && !this.twoMinuteFired) {
+      this.twoMinuteFired = true;
+    }
     while (this.clock <= 0 && !this.gameOver) {
       if (this.quarter >= 4) {
         this.clock = 0;
@@ -351,9 +425,10 @@ export class GameFlow {
       }
       this.quarter++;
       this.clock += this.cfg.quarterSeconds;
+      this.twoMinuteFired = false; // reset each quarter
       if (this.quarter === 3) {
-        // Second-half kickoff to whoever did NOT receive to open the game.
-        // (Tracked implicitly: give it to current defense.)
+        // Halftime: reset timeouts and kick off to the team that didn't receive.
+        this.timeouts = { home: 3, away: 3 };
         this.kickoffTo(this.possession === "home" ? "away" : "home");
       }
     }

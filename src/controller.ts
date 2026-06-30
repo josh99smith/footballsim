@@ -20,7 +20,17 @@ const SPEED_FACTOR: Record<Speed, number> = {
   pause: 0, "0.5": 0.5, "1": 1, "2": 2, "4": 4, instant: 0,
 };
 
-export type Phase = "preSnap" | "live" | "result" | "gameOver";
+export type Phase = "setup" | "preSnap" | "live" | "result" | "conversion" | "gameOver";
+
+export type Difficulty = "easy" | "normal" | "hard";
+
+export interface GameSetup {
+  seed: number;
+  quarterSeconds: number;
+  difficulty: Difficulty;
+  home: { name: string; abbr: string; color: string };
+  away: { name: string; abbr: string; color: string };
+}
 
 export interface PbpEntry {
   quarter: number;
@@ -114,6 +124,11 @@ export interface UIState {
   philosophy: Philosophy;
   pbp: PbpEntry[];
   winner: TeamId | "tie" | null;
+  seed: number;
+  difficulty: Difficulty;
+  quarterSeconds: number;
+  /** True when the user owes a conversion choice (XP vs two-point). */
+  awaitingConversion: boolean;
 }
 
 type Emit = (s: UIState) => void;
@@ -124,12 +139,15 @@ export class GameController {
   private teams: { home: Team; away: Team };
   private sim: PlaySim | null = null;
   private live = false;
-  private phase: Phase = "preSnap";
+  private phase: Phase = "setup";
   private speed: Speed = "1";
   private philosophy: Philosophy = { ...DEFAULT_PHILOSOPHY };
   private userTeam: TeamId = "home";
   private seed: number;
   private cfg: GameConfig;
+  private difficulty: Difficulty = "normal";
+  private lastQuarter = 1;
+  private twoMinShown = false;
 
   private pendingHiddenCall: string | null = null; // AI's call for the hidden side
   private callSide: "offense" | "defense" | null = null;
@@ -166,9 +184,32 @@ export class GameController {
   constructor(seed: number, cfg: GameConfig = DEFAULT_CONFIG) {
     this.seed = seed >>> 0;
     this.cfg = cfg;
+    // Build a default game so the setup screen has team names/colors to seed
+    // its form, but stay in the setup phase until the user kicks off.
     this.teams = DEFAULT_TEAMS(this.seed);
     this.flow = new GameFlow(this.teams, new RNG(this.seed ^ 0xabcdef), cfg);
     this.stats = new StatsAggregator(this.teams);
+    this.phase = "setup";
+  }
+
+  /** Apply a setup config and kick off a fresh game. */
+  startGame(setup: GameSetup): void {
+    this.seed = setup.seed >>> 0;
+    this.cfg = { quarterSeconds: setup.quarterSeconds };
+    this.difficulty = setup.difficulty;
+    this.teams = buildTeams(setup);
+    this.flow = new GameFlow(this.teams, new RNG(this.seed ^ 0xabcdef), this.cfg);
+    this.stats = new StatsAggregator(this.teams);
+    this.sim = null;
+    this.live = false;
+    this.pbp = [];
+    this.banner = null;
+    this.soundCues = [];
+    this.momentum = { home: 0, away: 0 };
+    this.trails.clear();
+    this.effects = [];
+    this.lastPlayText = "Kickoff. Game on.";
+    this.lastQuarter = 1;
     this.beginPlaySelection();
   }
 
@@ -194,22 +235,24 @@ export class GameController {
     this.publish();
   }
 
-  reset(seed?: number): void {
-    this.seed = (seed ?? this.seed + 1) >>> 0;
-    this.teams = DEFAULT_TEAMS(this.seed);
-    this.flow = new GameFlow(this.teams, new RNG(this.seed ^ 0xabcdef), this.cfg);
-    this.stats = new StatsAggregator(this.teams);
+  /** Return to the setup screen (e.g. "New Game"). */
+  reset(): void {
     this.sim = null;
     this.live = false;
-    this.phase = "preSnap";
-    this.pbp = [];
-    this.lastPlayText = "Kickoff. Game on.";
-    this.trails.clear();
-    this.effects = [];
+    this.phase = "setup";
     this.banner = null;
-    this.soundCues = [];
-    this.momentum = { home: 0, away: 0 };
-    this.beginPlaySelection();
+    this.publish();
+  }
+
+  /** Current config, for seeding the setup form. */
+  currentSetup(): GameSetup {
+    return {
+      seed: this.seed,
+      quarterSeconds: this.cfg.quarterSeconds,
+      difficulty: this.difficulty,
+      home: { name: this.teams.home.name, abbr: this.teams.home.abbr, color: this.teams.home.color },
+      away: { name: this.teams.away.name, abbr: this.teams.away.abbr, color: this.teams.away.color },
+    };
   }
 
   // user picks
@@ -224,6 +267,22 @@ export class GameController {
   userSpecialTeams(kind: "punt" | "fieldGoal"): void {
     if (this.phase !== "preSnap") return;
     this.resolveSpecialTeams(kind);
+  }
+  userClockPlay(kind: "kneel" | "spike"): void {
+    if (this.phase !== "preSnap" || this.callSide !== "offense") return;
+    const commit = kind === "kneel" ? this.flow.kneel() : this.flow.spike();
+    this.afterDiscretePlay(this.userTeam, commit, kind === "kneel" ? "Kneel" : "Spike");
+  }
+  userTimeout(): void {
+    if (this.phase !== "preSnap") return;
+    if (!this.flow.useTimeout(this.userTeam)) return;
+    this.lastPlayText = `${this.teams[this.userTeam].abbr} timeout.`;
+    this.logPbp(this.userTeam, `${this.teams[this.userTeam].abbr} call timeout (${this.flow.timeouts[this.userTeam]} left).`);
+    this.publish();
+  }
+  userConvert(kind: "xp" | "two"): void {
+    if (this.phase !== "conversion") return;
+    this.resolveConversionOutcome(kind);
   }
 
   // ---- per-frame driving (called by the renderer's rAF loop) ----
@@ -519,10 +578,100 @@ export class GameController {
     this.logPbp(offTeam, commit.text);
     this.makeBanner(offTeam, commit, result);
     this.updateMomentum(offTeam, commit, result);
+
+    // A touchdown owes a conversion before play continues.
+    if (this.flow.pendingConversion) { this.enterConversion(); return; }
+
+    this.applyGameMoments(!!commit.isScore);
     this.phase = "result";
     this.publish();
     // Advance to the next selection (field stays frozen on the final frame).
     this.beginPlaySelection();
+  }
+
+  // ---- conversions & post-play moments ----
+
+  private enterConversion(): void {
+    const team = this.flow.pendingConversion!;
+    this.publish(); // show the TOUCHDOWN banner first
+    if (team === this.userTeam) {
+      this.phase = "conversion";
+      this.callSide = null;
+      this.publish();
+    } else {
+      this.resolveConversionOutcome(this.aiConversion(team));
+    }
+  }
+
+  private aiConversion(team: TeamId): "xp" | "two" {
+    const info = this.flow.info();
+    const diff = info.score[team] - info.score[team === "home" ? "away" : "home"];
+    const r = this.flow.rng;
+    if (info.quarter < 4) return r.chance(0.05) ? "two" : "xp";
+    // Late-game two-point chart situations.
+    if ([1, -2, -5, -10, -12, -16].includes(diff)) return r.chance(0.7) ? "two" : "xp";
+    return r.chance(0.1) ? "two" : "xp";
+  }
+
+  private resolveConversionOutcome(kind: "xp" | "two"): void {
+    const team = this.flow.pendingConversion!;
+    const commit = this.flow.resolveConversion(kind);
+    this.stats.recordScores(this.flow.score.home, this.flow.score.away);
+    this.stats.recordTop(this.flow.top.home, this.flow.top.away);
+    this.lastPlayText = commit.text;
+    this.logPbp(team, commit.text);
+    const good = !!commit.isScore;
+    this.banner = {
+      id: ++this.bannerSeq,
+      tone: good ? "score" : "info",
+      title: kind === "two" ? (good ? "TWO-POINT" : "2-PT FAILED") : (good ? "EXTRA POINT" : "XP MISSED"),
+      sub: this.teams[team].abbr,
+      team,
+    };
+    this.applyGameMoments(true);
+    this.phase = "result";
+    this.publish();
+    this.beginPlaySelection();
+  }
+
+  /** Shared tail for non-sim plays (kneel / spike). */
+  private afterDiscretePlay(offTeam: TeamId, commit: CommitOutcome, label: string): void {
+    this.stats.recordScores(this.flow.score.home, this.flow.score.away);
+    this.stats.recordTop(this.flow.top.home, this.flow.top.away);
+    this.lastPlayText = commit.text;
+    this.logPbp(offTeam, commit.text);
+    this.banner = {
+      id: ++this.bannerSeq,
+      tone: commit.changedPossession ? "turnover" : "info",
+      title: label.toUpperCase(),
+      sub: this.teams[offTeam].abbr,
+      team: offTeam,
+    };
+    this.applyGameMoments(false);
+    this.phase = "result";
+    this.publish();
+    this.beginPlaySelection();
+  }
+
+  /** Halftime / two-minute warning banners (may override the play banner). */
+  private applyGameMoments(scored: boolean): void {
+    if (this.flow.quarter !== this.lastQuarter) {
+      const enteringHalf = this.lastQuarter < 3 && this.flow.quarter >= 3;
+      this.lastQuarter = this.flow.quarter;
+      this.twoMinShown = false;
+      if (enteringHalf && !this.flow.gameOver) {
+        const s = this.flow.score;
+        this.banner = {
+          id: ++this.bannerSeq, tone: "info", title: "HALFTIME",
+          sub: `${this.teams.home.abbr} ${s.home} – ${s.away} ${this.teams.away.abbr}`, team: null,
+        };
+        return;
+      }
+    }
+    if (!scored && this.flow.twoMinuteFired && !this.twoMinShown) {
+      this.twoMinShown = true;
+      this.banner = { id: ++this.bannerSeq, tone: "info", title: "TWO-MINUTE WARNING", sub: "", team: null };
+    }
   }
 
   private resolveSpecialTeams(kind: "punt" | "fieldGoal"): void {
@@ -534,6 +683,7 @@ export class GameController {
     this.lastPlayText = commit.text;
     this.logPbp(offTeam, commit.text);
     this.makeBanner(offTeam, commit, null);
+    this.applyGameMoments(!!commit.isScore);
     this.beginPlaySelection();
   }
 
@@ -544,7 +694,7 @@ export class GameController {
     if (commit.isScore) {
       const s = commit.isScore;
       const titles: Record<typeof s.type, string> = {
-        TD: "TOUCHDOWN", FG: "FIELD GOAL", SAFETY: "SAFETY", XP: "EXTRA POINT",
+        TD: "TOUCHDOWN", FG: "FIELD GOAL", SAFETY: "SAFETY", XP: "EXTRA POINT", TWO: "TWO-POINT",
       };
       banner = { tone: "score", title: titles[s.type], sub: this.teams[s.team].name, team: s.team };
       this.soundCues.push("cheer");
@@ -684,9 +834,39 @@ export class GameController {
       philosophy: { ...this.philosophy },
       pbp: [...this.pbp],
       winner: this.winner(),
+      seed: this.seed,
+      difficulty: this.difficulty,
+      quarterSeconds: this.cfg.quarterSeconds,
+      awaitingConversion: this.phase === "conversion",
     });
   }
 }
 
 const offPlayLabel = (id: string): string => OFF_PLAYS.find((p) => p.id === id)?.name ?? id;
 const defPlayLabel = (id: string): string => DEF_PLAYS.find((p) => p.id === id)?.name ?? id;
+
+const RATINGS_KEYS = [
+  "speed", "strength", "agility", "awareness", "catching", "tackling", "blocking",
+] as const;
+
+/** Build teams from a setup: apply name/abbr/color overrides + difficulty. */
+function buildTeams(setup: GameSetup): { home: Team; away: Team } {
+  const t = DEFAULT_TEAMS(setup.seed);
+  const apply = (team: Team, ov: GameSetup["home"]) => {
+    if (ov.name.trim()) team.name = ov.name.trim();
+    if (ov.abbr.trim()) team.abbr = ov.abbr.trim().toUpperCase().slice(0, 4);
+    if (ov.color.trim()) team.color = ov.color.trim();
+  };
+  apply(t.home, setup.home);
+  apply(t.away, setup.away);
+  // Difficulty handicaps the AI (away) team's ratings.
+  const delta = setup.difficulty === "easy" ? -7 : setup.difficulty === "hard" ? 7 : 0;
+  if (delta !== 0) {
+    for (const p of [...t.away.offense, ...t.away.defense]) {
+      for (const k of RATINGS_KEYS) {
+        p.ratings[k] = Math.max(35, Math.min(99, p.ratings[k] + delta));
+      }
+    }
+  }
+  return t;
+}

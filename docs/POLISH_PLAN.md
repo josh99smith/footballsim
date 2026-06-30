@@ -36,11 +36,13 @@ Highest visual payoff; the sim already produces the data, this draws it richer.
 - Balance tuning pass + committed harness (`npm run balance`): completions
   ~64-79%, runs ~5-7 vs a base front, realistic final scores.
 
-## Phase 4 — Game management & options ⬜
-- Settings: quarter length, difficulty, seed input (shareable games), team
-  picker / custom names & colors.
-- Timeouts, two-minute warning, kneel / spike, onside kick, go-for-two.
-- Halftime summary; end-of-game stat leaders.
+## Phase 4 — Game management & options ✅ done
+- Pre-game setup screen: quarter length, difficulty (AI ratings handicap),
+  shareable seed (+ randomize), team names / abbreviations / colors.
+- Timeouts (3/half, reset at halftime), two-minute warning, kneel, spike,
+  go-for-two vs. extra point. *(Onside kick deferred — needs a kickoff-decision
+  refactor for low payoff.)*
+- Halftime summary banner; end-of-game stat leaders (pass / rush / rec).
 
 ## Phase 5 — Persistence & replay ⬜
 - localStorage save / resume; recent results.

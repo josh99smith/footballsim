@@ -48,13 +48,18 @@ describe("GameFlow", () => {
     expect(g.ballOn).toBe(58);
   });
 
-  it("scores a touchdown and changes possession via kickoff", () => {
+  it("scores a touchdown, defers the conversion, then kicks off", () => {
     const g = newGame(1);
     g.possession = "home"; g.down = 1; g.distance = 10; g.ballOn = 95;
     const out = g.commitPlayResult(runResult(8, { touchdown: true }));
     expect(out.isScore?.type).toBe("TD");
+    expect(g.score.home).toBe(6); // 6 now; the point(s) come from the conversion
+    expect(g.pendingConversion).toBe("home");
+    expect(g.possession).toBe("home"); // unchanged until the try resolves
+    g.resolveConversion("xp");
+    expect(g.pendingConversion).toBeNull();
+    expect(g.possession).toBe("away"); // kickoff after the conversion
     expect(g.score.home).toBeGreaterThanOrEqual(6);
-    expect(g.possession).toBe("away");
   });
 
   it("handles an interception as a change of possession", () => {

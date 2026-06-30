@@ -5,11 +5,25 @@ import { PlaySelectPanel } from "./ui/PlaySelectPanel";
 import { StatsPanel } from "./ui/StatsPanel";
 import { GameLog } from "./ui/GameLog";
 import { Banner } from "./ui/Banner";
+import { SetupScreen } from "./ui/SetupScreen";
 import { useGame } from "./store/gameStore";
 
 export default function App() {
   const homeName = useGame((s) => s.homeName);
   const awayName = useGame((s) => s.awayName);
+  const phase = useGame((s) => s.phase);
+
+  if (phase === "setup") {
+    return (
+      <div className="app">
+        <header className="app-header">
+          <h1>Gridiron Coach</h1>
+          <span className="matchup">2D football, you call the plays</span>
+        </header>
+        <SetupScreen />
+      </div>
+    );
+  }
 
   return (
     <div className="app">
