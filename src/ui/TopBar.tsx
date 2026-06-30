@@ -36,6 +36,24 @@ export function TopBar() {
         <span className="tb-abbr">{s.awayAbbr || "AWAY"}</span>
         <span className="tb-dot" style={{ background: s.awayColor }} />
       </div>
+
+      <DriveBar />
+    </div>
+  );
+}
+
+/** Thin field-position bar: where the ball is on the offense's drive, with a
+ *  first-down tick. Oriented so the offense always drives left → right. */
+function DriveBar() {
+  const s = useGame();
+  const color = s.info.possession === "home" ? s.homeColor : s.awayColor;
+  const ballPct = Math.max(0, Math.min(100, s.info.ballOn));
+  const fdPct = Math.max(0, Math.min(100, s.info.ballOn + s.info.distance));
+  return (
+    <div className="tb-progress" aria-hidden>
+      <div className="tb-prog-fill" style={{ width: `${ballPct}%`, background: color }} />
+      <div className="tb-prog-fd" style={{ left: `${fdPct}%` }} />
+      <div className="tb-prog-ball" style={{ left: `${ballPct}%`, background: color }} />
     </div>
   );
 }

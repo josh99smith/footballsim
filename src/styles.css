@@ -71,6 +71,23 @@ button, input[type="range"] {
 .tb-center { text-align: center; }
 .tb-dd { font-size: 15px; font-weight: 800; letter-spacing: 0.3px; }
 .tb-sub { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tb-team.has .tb-abbr { text-shadow: 0 0 10px currentColor; }
+.tb-poss { animation: poss-pulse 1.4s ease-in-out infinite; }
+@keyframes poss-pulse { 0%,100% { opacity: 0.55; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.1); } }
+
+/* drive / field-position bar */
+.tb-progress {
+  grid-column: 1 / -1;
+  position: relative;
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.12);
+  overflow: visible;
+}
+.tb-prog-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; opacity: 0.85; transition: width 0.4s ease; }
+.tb-prog-fd { position: absolute; top: -2px; width: 2px; height: 8px; background: var(--accent-2); border-radius: 1px; transition: left 0.4s ease; }
+.tb-prog-ball { position: absolute; top: -2px; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; border: 1px solid #fff; transition: left 0.4s ease; }
 
 /* ---- bottom dock ---- */
 .dock {
@@ -185,9 +202,12 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   transform: translate(-50%, -50%);
   z-index: 25;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 10px 26px; border-radius: 12px; text-align: center;
-  background: rgba(13,17,23,0.85); border: 2px solid var(--accent, #2e6fdb);
-  box-shadow: 0 6px 28px rgba(0,0,0,0.55); pointer-events: auto; cursor: pointer;
+  padding: 12px 28px; border-radius: 14px; text-align: center;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent, #2e6fdb) 34%, rgba(13,17,23,0.92)), rgba(13,17,23,0.92));
+  border: 2px solid var(--accent, #2e6fdb);
+  box-shadow: 0 6px 30px rgba(0,0,0,0.6), 0 0 24px -6px var(--accent, #2e6fdb);
+  pointer-events: auto; cursor: pointer;
   animation: banner-in 0.28s cubic-bezier(0.2,1.3,0.5,1) both;
 }
 .banner-title { font-weight: 800; letter-spacing: 1.5px; color: #fff; line-height: 1.1; }
