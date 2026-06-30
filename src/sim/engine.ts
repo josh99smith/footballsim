@@ -81,6 +81,8 @@ export class PlaySim {
   private handoffTick = 99999;
   private thrown = false;
   private throwTargetId: string | null = null;
+  private throwFrom: Vec2 | null = null;
+  private throwTick = 0;
   private landTick = 0;
   private airYards = 0;
   private scrambling = false;
@@ -524,6 +526,8 @@ export class PlaySim {
     this.thrown = true;
     this.throwTargetId = target.id;
     this.resolvedTargetId = target.id;
+    this.throwFrom = { ...qb.pos };
+    this.throwTick = this.tick;
     this.landTick = this.tick + Math.round(hang / DT);
     qb.hasBall = false;
     this.emit({ t: "pass", from: qb.id, to: target.id, airYards: Math.round(this.airYards) });
@@ -864,6 +868,29 @@ export class PlaySim {
       los: 0,
       done: this.done,
     };
+  }
+
+  /** Local-frame route polylines for offensive receivers, for the renderer to
+   *  draw pre-snap (each line starts at the player's snap position). */
+  routePolylines(): Array<{ id: string; points: Vec2[] }> {
+    const out: Array<{ id: string; points: Vec2[] }> = [];
+    for (const a of this.agents) {
+      if (a.side !== "off" || a.assignment.kind !== "runRoute") continue;
+      const base = this.getSnap(a);
+      const points: Vec2[] = [{ ...base }];
+      for (const wp of a.assignment.waypoints) points.push(add(base, wp));
+      out.push({ id: a.id, points });
+    }
+    return out;
+  }
+
+  /** Pass-flight info while the ball is airborne, for arc rendering.
+   *  progress is 0 at release, 1 at arrival. */
+  passFlight(): { from: Vec2; to: Vec2; progress: number } | null {
+    if (!this.ball.inAir || !this.throwFrom || !this.ball.target) return null;
+    const span = Math.max(1, this.landTick - this.throwTick);
+    const progress = clamp((this.tick - this.throwTick) / span, 0, 1);
+    return { from: { ...this.throwFrom }, to: { ...this.ball.target }, progress };
   }
 
   /** Run the play to completion with no rendering (instant / headless / tests). */

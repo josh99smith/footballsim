@@ -37,11 +37,43 @@ export interface RenderAgent {
   number: number;
   color: string;
   hasBall: boolean;
+  /** Heading in screen space (radians), for orienting chevrons. */
+  heading: number;
+  moving: boolean;
+}
+
+export interface RenderRoute {
+  id: string;
+  color: string;
+  points: { x: number; y: number }[];
+}
+
+export interface RenderTrail {
+  id: string;
+  color: string;
+  points: { x: number; y: number }[];
+}
+
+export type EffectKind =
+  | "catch" | "tackle" | "sack" | "breakTackle" | "touchdown" | "incomplete";
+
+export interface RenderEffect {
+  kind: EffectKind;
+  x: number;
+  y: number;
+  /** 0 at birth → 1 at death. */
+  age: number;
 }
 
 export interface RenderFrame {
   agents: RenderAgent[];
   ball: { x: number; y: number; inAir: boolean };
+  /** Pass arc, present only while the ball is airborne. */
+  flight: { fromX: number; fromY: number; toX: number; toY: number; progress: number } | null;
+  routes: RenderRoute[];
+  trails: RenderTrail[];
+  effects: RenderEffect[];
+  showRoutes: boolean;
   losAbs: number;
   firstDownAbs: number;
   dir: 1 | -1;
@@ -101,6 +133,11 @@ export class GameController {
   private accumulator = 0;
   private alpha = 0;
 
+  // visual-only state (synthesised from sim state; never written back)
+  private trails = new Map<string, Vec2[]>(); // local-frame position history
+  private effects: Array<{ kind: EffectKind; pos: Vec2; life: number; max: number }> = [];
+  private readonly TRAIL_LEN = 14;
+
   private emit: Emit = () => {};
   liveEvents: SimEvent[] = [];
 
@@ -145,6 +182,8 @@ export class GameController {
     this.phase = "preSnap";
     this.pbp = [];
     this.lastPlayText = "Kickoff. Game on.";
+    this.trails.clear();
+    this.effects = [];
     this.beginPlaySelection();
   }
 
@@ -175,6 +214,9 @@ export class GameController {
       const events = this.sim.step();
       this.liveEvents.push(...events);
       this.captureCur();
+      this.recordTrails();
+      this.spawnEffects(events);
+      this.ageEffects();
       this.accumulator -= 1;
       guard++;
       if (this.sim.done) {
@@ -185,33 +227,123 @@ export class GameController {
     this.alpha = this.live ? Math.min(this.accumulator, 1) : 0;
   }
 
+  private recordTrails(): void {
+    if (!this.sim) return;
+    for (const ag of this.sim.agents) {
+      const hist = this.trails.get(ag.id) ?? [];
+      hist.push({ ...ag.pos });
+      if (hist.length > this.TRAIL_LEN) hist.shift();
+      this.trails.set(ag.id, hist);
+    }
+  }
+
+  private spawnEffects(events: SimEvent[]): void {
+    if (!this.sim) return;
+    const at = (id?: string): Vec2 | null => {
+      if (!id) return null;
+      const ag = this.sim!.agents.find((a) => a.id === id);
+      return ag ? { ...ag.pos } : null;
+    };
+    const add = (kind: EffectKind, pos: Vec2 | null, max = 36) => {
+      if (pos) this.effects.push({ kind, pos, life: max, max });
+    };
+    for (const e of events) {
+      switch (e.t) {
+        case "catch": add("catch", at(e.by)); break;
+        case "tackle": add("tackle", at(e.carrier)); break;
+        case "sack": add("sack", at(e.carrier), 48); break;
+        case "breakTackle": add("breakTackle", at(e.carrier)); break;
+        case "touchdown": add("touchdown", at(e.by), 60); break;
+        case "incomplete":
+          add("incomplete", this.sim.ball.target ? { ...this.sim.ball.target } : null);
+          break;
+      }
+    }
+  }
+
+  private ageEffects(): void {
+    this.effects = this.effects.filter((e) => {
+      e.life -= 1;
+      return e.life > 0;
+    });
+  }
+
   renderFrame(): RenderFrame | null {
     if (!this.sim) return null;
     const a = this.live ? this.alpha : 1;
     const losAbs = this.flow.losAbs();
     const dir = this.flow.dir();
+    const offColor = this.teams[this.flow.possession].color;
+    const defColor = this.teams[this.flow.possession === "home" ? "away" : "home"].color;
+    // local -> absolute field coords
+    const toAbs = (p: Vec2): { x: number; y: number } => ({ x: losAbs + dir * p.x, y: p.y });
+
     const agents: RenderAgent[] = this.sim.agents.map((ag) => {
       const cur = this.curPos.get(ag.id) ?? ag.pos;
       const prev = this.prevPos.get(ag.id) ?? cur;
       const lx = prev.x + (cur.x - prev.x) * a;
       const ly = prev.y + (cur.y - prev.y) * a;
+      const speed = Math.hypot(ag.vel.x, ag.vel.y);
       return {
         id: ag.id,
         x: losAbs + dir * lx,
         y: ly,
         side: ag.side,
         number: ag.number,
-        color: ag.side === "off"
-          ? this.teams[this.flow.possession].color
-          : this.teams[this.flow.possession === "home" ? "away" : "home"].color,
+        color: ag.side === "off" ? offColor : defColor,
         hasBall: ag.hasBall,
+        heading: Math.atan2(ag.vel.y, dir * ag.vel.x),
+        moving: speed > 0.4,
       };
     });
+
     const bx = this.prevBall.x + (this.curBall.x - this.prevBall.x) * a;
     const by = this.prevBall.y + (this.curBall.y - this.prevBall.y) * a;
+
+    // Routes: only meaningful pre-snap / very early; drawn faintly.
+    const showRoutes = !this.live || this.sim.tick < 30;
+    const routes: RenderRoute[] = showRoutes
+      ? this.sim.routePolylines().map((r) => ({
+          id: r.id,
+          color: offColor,
+          points: r.points.map(toAbs),
+        }))
+      : [];
+
+    const trails: RenderTrail[] = this.live
+      ? [...this.trails.entries()]
+          .filter(([, pts]) => pts.length > 2)
+          .map(([id, pts]) => {
+            const ag = this.sim!.agents.find((x) => x.id === id);
+            return {
+              id,
+              color: ag && ag.side === "off" ? offColor : defColor,
+              points: pts.map(toAbs),
+            };
+          })
+      : [];
+
+    const effects: RenderEffect[] = this.effects.map((e) => {
+      const p = toAbs(e.pos);
+      return { kind: e.kind, x: p.x, y: p.y, age: 1 - e.life / e.max };
+    });
+
+    const pf = this.sim.passFlight();
+    let flight: RenderFrame["flight"] = null;
+    if (pf) {
+      const f = toAbs(pf.from);
+      const t = toAbs(pf.to);
+      flight = { fromX: f.x, fromY: f.y, toX: t.x, toY: t.y, progress: pf.progress };
+    }
+
     return {
       agents,
       ball: { x: losAbs + dir * bx, y: by, inAir: this.sim.ball.inAir },
+      flight,
+      routes,
+      trails,
+      effects,
+      showRoutes,
       losAbs,
       firstDownAbs: this.flow.firstDownAbs(),
       dir,
@@ -293,6 +425,8 @@ export class GameController {
       : offPlayLabel(offId);
     this.sim = this.flow.createSnap(offId, defId);
     this.liveEvents = [];
+    this.trails.clear();
+    this.effects = [];
     this.captureBoth();
     this.live = true;
     this.phase = "live";
