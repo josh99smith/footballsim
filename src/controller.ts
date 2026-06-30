@@ -61,8 +61,11 @@ export interface RenderAgent {
   number: number;
   color: string;
   hasBall: boolean;
-  /** Heading in screen space (radians), for orienting chevrons. */
-  heading: number;
+  /** Velocity in field space: vx = downfield (attack-direction adjusted,
+   *  +toward the target end zone), vy = across the field. The renderer turns
+   *  these into a screen-space heading so it owns the field orientation. */
+  vx: number;
+  vy: number;
   moving: boolean;
 }
 
@@ -456,7 +459,8 @@ export class GameController {
         number: ag.number,
         color: ag.side === "off" ? offColor : defColor,
         hasBall: ag.hasBall,
-        heading: Math.atan2(ag.vel.y, dir * ag.vel.x),
+        vx: dir * ag.vel.x,
+        vy: ag.vel.y,
         moving: speed > 0.4,
       };
     });

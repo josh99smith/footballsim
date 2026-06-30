@@ -2,7 +2,7 @@ import { useState } from "react";
 import { controller, useGame } from "../store/gameStore";
 import type { PlayerStats } from "../stats/aggregator";
 import type { TeamId } from "../sim/types";
-import { iconFor } from "./GameLog";
+import { iconFor } from "./icons";
 
 type Tab = "box" | "drives" | "pbp";
 

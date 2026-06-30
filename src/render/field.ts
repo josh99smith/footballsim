@@ -9,11 +9,13 @@ export interface DrawOpts {
 }
 
 /**
- * Draws the field and the current frame. Pure consumer of sim state — it reads
- * the frame and never writes back into the sim.
+ * Draws the field PORTRAIT (downfield runs vertically) and the current frame.
+ * Pure consumer of sim state — reads the frame, never writes back.
  *
- * Coordinate mapping: field downfield x (0..120) -> horizontal screen axis;
- * field width y (0..53.33) -> vertical screen axis.
+ * Coordinate mapping: field downfield x (0..120) -> vertical screen axis
+ * (x=0 home goal at the BOTTOM, x=120 away goal at the TOP); field width
+ * y (0..53.33) -> horizontal screen axis. The field is scaled to fill its
+ * container (maximised), preserving aspect.
  */
 export function drawField(
   ctx: CanvasRenderingContext2D,
@@ -24,101 +26,101 @@ export function drawField(
 ): void {
   ctx.clearRect(0, 0, w, h);
 
-  // Fit the 120x53.33 field into the canvas with a small margin, preserving aspect.
-  const margin = 5;
+  const margin = 4;
   const availW = w - margin * 2;
   const availH = h - margin * 2;
-  const scale = Math.min(availW / FIELD.TOTAL_LENGTH, availH / FIELD.WIDTH);
-  const fieldW = FIELD.TOTAL_LENGTH * scale;
-  const fieldH = FIELD.WIDTH * scale;
+  const scale = Math.min(availW / FIELD.WIDTH, availH / FIELD.TOTAL_LENGTH);
+  const fieldW = FIELD.WIDTH * scale;
+  const fieldH = FIELD.TOTAL_LENGTH * scale;
   const ox = (w - fieldW) / 2;
   const oy = (h - fieldH) / 2;
 
+  // field width (yards across) -> screen X; downfield yard -> screen Y (inverted)
   const X = (yd: number): number => ox + yd * scale;
-  const Y = (yd: number): number => oy + yd * scale;
+  const Y = (down: number): number => oy + (FIELD.TOTAL_LENGTH - down) * scale;
 
   // Turf.
   ctx.fillStyle = "#1f7a3d";
-  ctx.fillRect(X(0), Y(0), fieldW, fieldH);
+  ctx.fillRect(X(0), Y(FIELD.TOTAL_LENGTH), fieldW, fieldH);
 
-  // Alternating 10-yard mowing stripes.
-  ctx.fillStyle = "#23854391";
-  for (let yd = FIELD.END_ZONE; yd < FIELD.TOTAL_LENGTH - FIELD.END_ZONE; yd += 20) {
-    ctx.fillStyle = ((yd / 10) % 2 === 0) ? "#1c7038" : "#218040";
-    ctx.fillRect(X(yd), Y(0), 10 * scale, fieldH);
+  // 10-yard mowing stripes (run across the field, stacked vertically).
+  for (let yd = FIELD.END_ZONE; yd < FIELD.TOTAL_LENGTH - FIELD.END_ZONE; yd += 10) {
+    ctx.fillStyle = (yd / 10) % 2 === 0 ? "#1c7038" : "#218040";
+    ctx.fillRect(X(0), Y(yd + 10), fieldW, 10 * scale);
   }
 
-  // End zones.
+  // End zones (home at the bottom, away at the top).
   ctx.fillStyle = opts.homeEndzone;
-  ctx.fillRect(X(0), Y(0), FIELD.END_ZONE * scale, fieldH);
+  ctx.fillRect(X(0), Y(FIELD.END_ZONE), fieldW, FIELD.END_ZONE * scale);
   ctx.fillStyle = opts.awayEndzone;
-  ctx.fillRect(X(FIELD.TOTAL_LENGTH - FIELD.END_ZONE), Y(0), FIELD.END_ZONE * scale, fieldH);
+  ctx.fillRect(X(0), Y(FIELD.TOTAL_LENGTH), fieldW, FIELD.END_ZONE * scale);
 
-  // Yard lines & numbers.
+  // Yard lines + numbers.
   ctx.strokeStyle = "rgba(255,255,255,0.85)";
   ctx.lineWidth = 1;
-  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  ctx.fillStyle = "rgba(255,255,255,0.8)";
   ctx.font = `${Math.round(scale * 4)}px system-ui, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   for (let yd = FIELD.END_ZONE; yd <= FIELD.TOTAL_LENGTH - FIELD.END_ZONE; yd += 5) {
     ctx.beginPath();
-    ctx.moveTo(X(yd), Y(0));
-    ctx.lineTo(X(yd), Y(FIELD.WIDTH));
+    ctx.moveTo(X(0), Y(yd));
+    ctx.lineTo(X(FIELD.WIDTH), Y(yd));
     ctx.stroke();
     const fromGoal = yd - FIELD.END_ZONE;
     if (fromGoal % 10 === 0 && fromGoal > 0 && fromGoal < 100) {
       const num = fromGoal <= 50 ? fromGoal : 100 - fromGoal;
-      if (num > 0) {
-        ctx.fillText(String(num), X(yd), Y(7));
-        ctx.fillText(String(num), X(yd), Y(FIELD.WIDTH - 7));
-      }
+      ctx.fillText(String(num), X(8), Y(yd));
+      ctx.fillText(String(num), X(FIELD.WIDTH - 8), Y(yd));
     }
   }
 
-  // Hash marks.
-  ctx.strokeStyle = "rgba(255,255,255,0.55)";
+  // Hash marks (two columns running down the field).
+  ctx.strokeStyle = "rgba(255,255,255,0.5)";
   for (let yd = FIELD.END_ZONE; yd <= FIELD.TOTAL_LENGTH - FIELD.END_ZONE; yd += 1) {
-    for (const hy of [FIELD.HASH, FIELD.WIDTH - FIELD.HASH]) {
+    for (const hx of [FIELD.HASH, FIELD.WIDTH - FIELD.HASH]) {
       ctx.beginPath();
-      ctx.moveTo(X(yd), Y(hy) - scale * 0.5);
-      ctx.lineTo(X(yd), Y(hy) + scale * 0.5);
+      ctx.moveTo(X(hx) - scale * 0.5, Y(yd));
+      ctx.lineTo(X(hx) + scale * 0.5, Y(yd));
       ctx.stroke();
     }
   }
 
-  // Sidelines border.
+  // Sideline border.
   ctx.strokeStyle = "rgba(255,255,255,0.9)";
   ctx.lineWidth = 2;
-  ctx.strokeRect(X(0), Y(0), fieldW, fieldH);
+  ctx.strokeRect(X(0), Y(FIELD.TOTAL_LENGTH), fieldW, fieldH);
 
   if (!frame) {
     ctx.fillStyle = "rgba(255,255,255,0.9)";
-    ctx.font = `${Math.round(scale * 5)}px system-ui, sans-serif`;
-    ctx.fillText("Select a play to snap the ball", X(60), Y(FIELD.WIDTH / 2));
+    ctx.font = `${Math.round(scale * 4)}px system-ui, sans-serif`;
+    ctx.fillText("Pick a play to snap", X(FIELD.WIDTH / 2), Y(60));
     return;
   }
 
-  // Line of scrimmage & first-down marker.
+  // Line of scrimmage & first-down marker (horizontal lines).
   ctx.lineWidth = 2.5;
   ctx.strokeStyle = "#1e6bff";
   ctx.beginPath();
-  ctx.moveTo(X(frame.losAbs), Y(0));
-  ctx.lineTo(X(frame.losAbs), Y(FIELD.WIDTH));
+  ctx.moveTo(X(0), Y(frame.losAbs));
+  ctx.lineTo(X(FIELD.WIDTH), Y(frame.losAbs));
   ctx.stroke();
 
   const fd = frame.firstDownAbs;
   if (fd > FIELD.END_ZONE && fd < FIELD.TOTAL_LENGTH - FIELD.END_ZONE) {
     ctx.strokeStyle = "#ffd21e";
     ctx.beginPath();
-    ctx.moveTo(X(fd), Y(0));
-    ctx.lineTo(X(fd), Y(FIELD.WIDTH));
+    ctx.moveTo(X(0), Y(fd));
+    ctx.lineTo(X(FIELD.WIDTH), Y(fd));
     ctx.stroke();
   }
 
-  const r = scale * 1.3;
+  const r = scale * 1.35;
+  // map a field point (downfield, width) -> screen
+  const sx = (p: { x: number; y: number }) => X(p.y);
+  const sy = (p: { x: number; y: number }) => Y(p.x);
 
-  // Route lines (pre-snap / early): dashed, drawn beneath everything.
+  // Route lines (pre-snap / early): dashed, beneath everything.
   if (frame.showRoutes) {
     ctx.save();
     ctx.setLineDash([scale * 1.4, scale * 1.2]);
@@ -127,20 +129,17 @@ export function drawField(
       if (route.points.length < 2) continue;
       ctx.strokeStyle = withAlpha(route.color, 0.55);
       ctx.beginPath();
-      ctx.moveTo(X(route.points[0].x), Y(route.points[0].y));
-      for (let i = 1; i < route.points.length; i++) {
-        ctx.lineTo(X(route.points[i].x), Y(route.points[i].y));
-      }
+      ctx.moveTo(sx(route.points[0]), sy(route.points[0]));
+      for (let i = 1; i < route.points.length; i++) ctx.lineTo(sx(route.points[i]), sy(route.points[i]));
       ctx.stroke();
-      // Arrowhead at the end of the route.
       const p1 = route.points[route.points.length - 2];
       const p2 = route.points[route.points.length - 1];
-      drawArrowHead(ctx, X(p1.x), Y(p1.y), X(p2.x), Y(p2.y), scale * 1.3, withAlpha(route.color, 0.8));
+      drawArrowHead(ctx, sx(p1), sy(p1), sx(p2), sy(p2), scale * 1.3, withAlpha(route.color, 0.8));
     }
     ctx.restore();
   }
 
-  // Motion trails: fade from tail to head.
+  // Motion trails.
   ctx.save();
   ctx.lineCap = "round";
   for (const trail of frame.trails) {
@@ -150,8 +149,8 @@ export function drawField(
       ctx.strokeStyle = withAlpha(trail.color, t * 0.35);
       ctx.lineWidth = scale * 0.9 * t;
       ctx.beginPath();
-      ctx.moveTo(X(pts[i - 1].x), Y(pts[i - 1].y));
-      ctx.lineTo(X(pts[i].x), Y(pts[i].y));
+      ctx.moveTo(sx(pts[i - 1]), sy(pts[i - 1]));
+      ctx.lineTo(sx(pts[i]), sy(pts[i]));
       ctx.stroke();
     }
   }
@@ -161,11 +160,10 @@ export function drawField(
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   for (const a of frame.agents) {
-    const cx = X(a.x);
-    const cy = Y(a.y);
+    const cx = X(a.y);
+    const cy = Y(a.x);
 
     if (a.hasBall) {
-      // Glow ring behind the ball carrier.
       ctx.beginPath();
       ctx.fillStyle = "rgba(255,210,30,0.30)";
       ctx.arc(cx, cy, r + scale * 1.6, 0, Math.PI * 2);
@@ -177,28 +175,25 @@ export function drawField(
     if (a.side === "off") {
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.fill();
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = "rgba(0,0,0,0.5)";
-      ctx.stroke();
     } else {
-      // Defenders are chevrons that point the way they're moving.
-      drawChevron(ctx, cx, cy, r * 1.25, a.moving ? a.heading : 0);
+      // Screen velocity: width -> +X, downfield -> -Y (up).
+      const screenHeading = a.moving ? Math.atan2(-a.vx, a.vy) : -Math.PI / 2;
+      drawChevron(ctx, cx, cy, r * 1.25, screenHeading);
       ctx.fill();
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = "rgba(0,0,0,0.5)";
-      ctx.stroke();
     }
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(0,0,0,0.5)";
+    ctx.stroke();
 
     ctx.fillStyle = "#fff";
     ctx.font = `bold ${Math.round(scale * 1.6)}px system-ui, sans-serif`;
     ctx.fillText(String(a.number), cx, cy);
   }
 
-  // Ball in flight: arc with a ground shadow + a faint lead line.
+  // Ball in flight.
   if (frame.flight) {
     const f = frame.flight;
-    const px = f.fromX + (f.toX - f.fromX) * f.progress;
-    const py = f.fromY + (f.toY - f.fromY) * f.progress;
+    const px = { x: f.fromX + (f.toX - f.fromX) * f.progress, y: f.fromY + (f.toY - f.fromY) * f.progress };
     const flightDist = Math.hypot(f.toX - f.fromX, f.toY - f.fromY);
     const lift = Math.sin(f.progress * Math.PI) * Math.min(scale * 9, flightDist * scale * 0.18);
 
@@ -207,20 +202,18 @@ export function drawField(
     ctx.strokeStyle = "rgba(255,255,255,0.35)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(X(f.fromX), Y(f.fromY));
-    ctx.lineTo(X(f.toX), Y(f.toY));
+    ctx.moveTo(X(f.fromY), Y(f.fromX));
+    ctx.lineTo(X(f.toY), Y(f.toX));
     ctx.stroke();
     ctx.restore();
 
-    // Shadow.
     ctx.beginPath();
     ctx.fillStyle = "rgba(0,0,0,0.25)";
-    ctx.ellipse(X(px), Y(py), r * 0.7, r * 0.35, 0, 0, Math.PI * 2);
+    ctx.ellipse(X(px.y), Y(px.x), r * 0.6, r * 0.8, 0, 0, Math.PI * 2);
     ctx.fill();
-    // Ball.
     ctx.beginPath();
     ctx.fillStyle = "#7a4318";
-    ctx.ellipse(X(px), Y(py) - lift, r * 0.8, r * 0.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(X(px.y), Y(px.x) - lift, r * 0.5, r * 0.8, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = "#fff";
     ctx.lineWidth = 1;
@@ -228,26 +221,20 @@ export function drawField(
   } else if (frame.ball.inAir) {
     ctx.beginPath();
     ctx.fillStyle = "#7a4318";
-    ctx.ellipse(X(frame.ball.x), Y(frame.ball.y), r * 0.8, r * 0.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(X(frame.ball.y), Y(frame.ball.x), r * 0.5, r * 0.8, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // Event pops on top of everything.
-  for (const fx of frame.effects) drawEffect(ctx, X(fx.x), Y(fx.y), fx, scale);
+  for (const fx of frame.effects) drawEffect(ctx, X(fx.y), Y(fx.x), fx, scale);
 }
 
 function drawChevron(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  size: number,
-  heading: number,
+  ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, heading: number,
 ): void {
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(heading);
   ctx.beginPath();
-  // A blunt arrowhead pointing toward +x (then rotated to the heading).
   ctx.moveTo(size, 0);
   ctx.lineTo(-size * 0.7, size * 0.85);
   ctx.lineTo(-size * 0.3, 0);
@@ -257,13 +244,8 @@ function drawChevron(
 }
 
 function drawArrowHead(
-  ctx: CanvasRenderingContext2D,
-  fromX: number,
-  fromY: number,
-  toX: number,
-  toY: number,
-  size: number,
-  color: string,
+  ctx: CanvasRenderingContext2D, fromX: number, fromY: number, toX: number, toY: number,
+  size: number, color: string,
 ): void {
   const ang = Math.atan2(toY - fromY, toX - fromX);
   ctx.save();
@@ -286,11 +268,7 @@ interface EffectLike {
 }
 
 function drawEffect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  fx: EffectLike,
-  scale: number,
+  ctx: CanvasRenderingContext2D, x: number, y: number, fx: EffectLike, scale: number,
 ): void {
   const fade = 1 - fx.age;
   const grow = 1 + fx.age * 2.2;

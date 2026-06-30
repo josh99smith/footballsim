@@ -1,63 +1,35 @@
 import { FieldCanvas } from "./ui/FieldCanvas";
-import { Scoreboard } from "./ui/Scoreboard";
-import { SpeedControls } from "./ui/SpeedControls";
-import { PlaySelectPanel } from "./ui/PlaySelectPanel";
-import { StatsPanel } from "./ui/StatsPanel";
-import { GameLog } from "./ui/GameLog";
+import { TopBar } from "./ui/TopBar";
+import { BottomDock } from "./ui/BottomDock";
+import { PlaySheet } from "./ui/PlaySheet";
 import { Banner } from "./ui/Banner";
+import { StatsOverlay } from "./ui/StatsOverlay";
+import { GameOverOverlay } from "./ui/GameOverOverlay";
 import { SetupScreen } from "./ui/SetupScreen";
 import { KeyboardControls } from "./ui/KeyboardControls";
 import { useGame } from "./store/gameStore";
 
 export default function App() {
-  const homeName = useGame((s) => s.homeName);
-  const awayName = useGame((s) => s.awayName);
   const phase = useGame((s) => s.phase);
 
   if (phase === "setup") {
     return (
-      <div className="app">
-        <header className="app-header">
-          <h1>Gridiron Coach</h1>
-          <span className="matchup">2D football, you call the plays</span>
-        </header>
+      <div className="app-setup">
         <SetupScreen />
       </div>
     );
   }
 
   return (
-    <div className="app">
+    <div className="stage">
       <KeyboardControls />
-      <header className="app-header">
-        <h1>Gridiron Coach</h1>
-        <span className="matchup">{awayName} @ {homeName}</span>
-      </header>
-
-      <Scoreboard />
-
-      <div className="main-grid">
-        <aside className="left-col">
-          <PlaySelectPanel />
-        </aside>
-
-        <section className="center-col">
-          <div className="field-stage">
-            <FieldCanvas />
-            <Banner />
-          </div>
-          <GameLog />
-          <SpeedControls />
-          <p className="keys-hint">
-            Keys: <b>1–9</b> pick play · <b>Space</b> pause · <b>←/→</b> speed ·
-            <b> I</b> instant · <b>P</b> punt · <b>G</b> FG · <b>K</b> kneel · <b>T</b> timeout · <b>M</b> mute
-          </p>
-        </section>
-
-        <aside className="right-col">
-          <StatsPanel />
-        </aside>
-      </div>
+      <FieldCanvas />
+      <TopBar />
+      <Banner />
+      <PlaySheet />
+      <BottomDock />
+      <StatsOverlay />
+      <GameOverOverlay />
     </div>
   );
 }

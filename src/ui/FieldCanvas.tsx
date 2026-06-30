@@ -71,7 +71,7 @@ export function FieldCanvas() {
 
   return (
     <div
-      className="field-wrap"
+      className="field-layer"
       ref={wrapRef}
       role="img"
       aria-label="2D football field showing the current play"
