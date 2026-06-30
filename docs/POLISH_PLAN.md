@@ -9,7 +9,7 @@ Status legend: ⬜ planned · 🚧 in progress · ✅ done
 
 ---
 
-## Phase 1 — Field comes alive ✅ (in progress)
+## Phase 1 — Field comes alive ✅ done
 Highest visual payoff; the sim already produces the data, this draws it richer.
 - Route lines drawn pre-snap for the called play (informed coaching); fading
   ghost-trails behind players during the live play.
@@ -19,7 +19,7 @@ Highest visual payoff; the sim already produces the data, this draws it richer.
 - Down-marker chain + first-down line + possession indicator polish.
 - *(Optional / later)* follow-ball camera + zoom, especially on mobile.
 
-## Phase 2 — Broadcast feel ⬜
+## Phase 2 — Broadcast feel ✅ done
 - Scoring banners (TD / FG / turnover) and an animated play-by-play ticker with icons.
 - Sound: whistle, crowd swell, hit / catch — behind a mute toggle, no autoplay traps.
 - Snap cadence + a brief, skippable result card (yards, tackler) between plays.
