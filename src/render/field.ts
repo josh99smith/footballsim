@@ -8,14 +8,22 @@ export interface DrawOpts {
   awayEndzone: string;
 }
 
+/** Follow camera, in FIELD units. cx = downfield centre (0..120),
+ *  cy = width centre (0..53.33), viewH = downfield yards visible (zoom). */
+export interface Camera {
+  cx: number;
+  cy: number;
+  viewH: number;
+}
+
 /**
  * Draws the field PORTRAIT (downfield runs vertically) and the current frame.
  * Pure consumer of sim state — reads the frame, never writes back.
  *
- * Coordinate mapping: field downfield x (0..120) -> vertical screen axis
- * (x=0 home goal at the BOTTOM, x=120 away goal at the TOP); field width
- * y (0..53.33) -> horizontal screen axis. The field is scaled to fill its
- * container (maximised), preserving aspect.
+ * A follow camera pans/zooms so the action stays centred and large; anything
+ * outside the field shows as dark out-of-bounds, so goal-line plays read clearly.
+ * Downfield x (0..120) -> vertical screen axis (x=0 home goal at the BOTTOM);
+ * width y (0..53.33) -> horizontal screen axis.
  */
 export function drawField(
   ctx: CanvasRenderingContext2D,
@@ -23,21 +31,19 @@ export function drawField(
   h: number,
   frame: RenderFrame | null,
   opts: DrawOpts,
+  cam: Camera,
 ): void {
-  ctx.clearRect(0, 0, w, h);
+  // Out-of-bounds backdrop (visible past the sidelines / end lines).
+  ctx.fillStyle = "#0a1a12";
+  ctx.fillRect(0, 0, w, h);
 
-  const margin = 4;
-  const availW = w - margin * 2;
-  const availH = h - margin * 2;
-  const scale = Math.min(availW / FIELD.WIDTH, availH / FIELD.TOTAL_LENGTH);
+  const scale = (h - 8) / cam.viewH;
   const fieldW = FIELD.WIDTH * scale;
   const fieldH = FIELD.TOTAL_LENGTH * scale;
-  const ox = (w - fieldW) / 2;
-  const oy = (h - fieldH) / 2;
 
-  // field width (yards across) -> screen X; downfield yard -> screen Y (inverted)
-  const X = (yd: number): number => ox + yd * scale;
-  const Y = (down: number): number => oy + (FIELD.TOTAL_LENGTH - down) * scale;
+  // width yard -> screen X; downfield yard -> screen Y (inverted, up = +downfield)
+  const X = (yd: number): number => w / 2 + (yd - cam.cy) * scale;
+  const Y = (down: number): number => h / 2 - (down - cam.cx) * scale;
 
   // Turf.
   ctx.fillStyle = "#1f7a3d";
