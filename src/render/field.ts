@@ -24,8 +24,8 @@ export function drawField(
 ): void {
   ctx.clearRect(0, 0, w, h);
 
-  // Fit the 120x53.33 field into the canvas with a margin, preserving aspect.
-  const margin = 12;
+  // Fit the 120x53.33 field into the canvas with a small margin, preserving aspect.
+  const margin = 5;
   const availW = w - margin * 2;
   const availH = h - margin * 2;
   const scale = Math.min(availW / FIELD.TOTAL_LENGTH, availH / FIELD.WIDTH);

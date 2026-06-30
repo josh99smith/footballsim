@@ -308,23 +308,25 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .panel-head { display: flex; justify-content: space-between; align-items: center; }
 .play-select h2 { margin: 0 0 4px; font-size: 16px; }
 .you-tag { font-size: 12px; color: var(--muted); }
-.play-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.play-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
 .play-card {
   text-align: left;
   background: var(--panel-2);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 14px;
-  min-height: 56px;
+  border-radius: 8px;
+  padding: 8px 11px;
   cursor: pointer;
   color: var(--text);
   transition: border-color 0.12s, transform 0.05s;
 }
 .play-card:active { transform: scale(0.99); border-color: var(--accent); }
 .play-card-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.play-name { font-weight: 600; font-size: 15px; }
+.play-name { font-weight: 600; font-size: 14px; }
 .play-form { font-size: 11px; color: var(--muted); flex: none; }
-.play-blurb { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.35; }
+.play-blurb {
+  display: block; font-size: 11px; color: var(--muted); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 .play-waiting {
   display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -350,10 +352,16 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   padding: 10px 14px; border-radius: 8px; cursor: pointer; font-weight: 600;
 }
 
-/* ---- philosophy ---- */
-.philosophy { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
-.philosophy h3 { margin: 0 0 2px; font-size: 14px; }
-.phil-note { margin: 0 0 12px; font-size: 11px; color: var(--muted); }
+/* ---- philosophy (collapsible) ---- */
+.philosophy { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.philosophy > summary {
+  cursor: pointer; font-size: 14px; font-weight: 600; list-style: none;
+  display: flex; align-items: center; gap: 6px; min-height: 32px;
+}
+.philosophy > summary::-webkit-details-marker { display: none; }
+.philosophy > summary::before { content: "▸"; color: var(--muted); font-size: 11px; }
+.philosophy[open] > summary::before { content: "▾"; }
+.phil-note { margin: 8px 0 12px; font-size: 11px; color: var(--muted); }
 .slider-row { display: block; margin-bottom: 14px; }
 .slider-label { font-size: 13px; display: block; margin-bottom: 5px; }
 .slider-track { display: flex; align-items: center; gap: 8px; }
@@ -438,7 +446,7 @@ button.primary.big { width: 100%; font-size: 15px; min-height: 48px; }
 
   .main-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.9fr);
+    grid-template-columns: minmax(0, 1.45fr) minmax(240px, 0.8fr);
     grid-template-areas:
       "field coach"
       "stats stats";
@@ -455,9 +463,9 @@ button.primary.big { width: 100%; font-size: 15px; min-height: 48px; }
    DESKTOP — classic three columns: coach | field | stats.
    ============================================================ */
 @media (min-width: 1040px) {
-  .app { max-width: 1500px; padding: 14px 18px 28px; }
+  .app { max-width: 1680px; padding: 14px 18px 28px; }
   .main-grid {
-    grid-template-columns: 320px minmax(0, 1fr) 360px;
+    grid-template-columns: 280px minmax(0, 1fr) 300px;
     grid-template-areas: "coach field stats";
   }
   .center-col { order: 0; }

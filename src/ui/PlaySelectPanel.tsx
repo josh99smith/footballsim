@@ -124,8 +124,8 @@ export function PlaySelectPanel() {
         </>
       )}
 
-      <div className="philosophy">
-        <h3>Coaching Philosophy</h3>
+      <details className="philosophy">
+        <summary>Coaching Philosophy</summary>
         <p className="phil-note">Drives the AI on the side you're not calling, and biases tendencies.</p>
         {SLIDERS.map((sl) => (
           <label key={sl.key} className="slider-row">
@@ -143,7 +143,7 @@ export function PlaySelectPanel() {
             </div>
           </label>
         ))}
-      </div>
+      </details>
     </div>
   );
 }
