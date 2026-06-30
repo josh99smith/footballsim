@@ -106,6 +106,8 @@ export interface RenderFrame {
   dir: 1 | -1;
   homeColor: string;
   awayColor: string;
+  homeAbbr: string;
+  awayAbbr: string;
 }
 
 export type BannerTone = "score" | "turnover" | "info";
@@ -517,6 +519,8 @@ export class GameController {
       dir,
       homeColor: this.teams.home.color,
       awayColor: this.teams.away.color,
+      homeAbbr: this.teams.home.abbr,
+      awayAbbr: this.teams.away.abbr,
     };
   }
 

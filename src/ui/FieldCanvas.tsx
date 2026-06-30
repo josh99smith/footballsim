@@ -78,6 +78,9 @@ export function FieldCanvas() {
 
     const cam: Camera = { cx: 60, cy: FIELD.WIDTH / 2, viewH: 118 };
     let camReady = false;
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    let shake = 0; // px
+    let punch = 1; // viewH multiplier (zoom punch on scores)
 
     // Ease the camera toward its target; returns true while still moving.
     const stepCamera = (frame: RenderFrame | null, w: number, h: number): boolean => {
@@ -94,27 +97,47 @@ export function FieldCanvas() {
       return Math.abs(t.cx - cam.cx) + Math.abs(t.cy - cam.cy) + Math.abs(t.viewH - cam.viewH) > 0.15;
     };
 
-    const draw = () => {
+    const draw = (time: number) => {
       const frame = controller.renderFrame();
       const rect = wrap.getBoundingClientRect();
       const moving = stepCamera(frame, rect.width, rect.height);
+      const drawn: Camera = { cx: cam.cx, cy: cam.cy, viewH: cam.viewH * punch };
+      const ms = time * 1000;
+      const ox = shake > 0.2 ? shake * Math.sin(ms * 0.05) : 0;
+      const oy = shake > 0.2 ? shake * Math.cos(ms * 0.043) : 0;
+      ctx.save();
+      ctx.translate(ox, oy);
       drawField(ctx, rect.width, rect.height, frame, {
         homeColor: frame?.homeColor ?? "#2e6fdb",
         awayColor: frame?.awayColor ?? "#d94a3d",
-        homeEndzone: withAlpha(frame?.homeColor ?? "#2e6fdb", 0.55),
-        awayEndzone: withAlpha(frame?.awayColor ?? "#d94a3d", 0.55),
-      }, cam);
-      return moving;
+        homeEndzone: withAlpha(frame?.homeColor ?? "#2e6fdb", 0.5),
+        awayEndzone: withAlpha(frame?.awayColor ?? "#d94a3d", 0.5),
+        homeAbbr: frame?.homeAbbr ?? "",
+        awayAbbr: frame?.awayAbbr ?? "",
+      }, drawn, time);
+      ctx.restore();
+      // decay
+      shake *= 0.84;
+      punch += (1 - punch) * 0.12;
+      const animating = shake > 0.2 || Math.abs(punch - 1) > 0.01;
+      return moving || animating;
     };
 
     const loop = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       controller.advance(dt);
-      for (const cue of controller.takeSoundCues()) sound.play(cue);
+      for (const cue of controller.takeSoundCues()) {
+        sound.play(cue);
+        if (!reduceMotion) {
+          if (cue === "hit") shake = Math.max(shake, 4);
+          else if (cue === "turnover") shake = Math.max(shake, 6);
+          else if (cue === "cheer") { shake = Math.max(shake, 9); punch = 0.82; }
+        }
+      }
       if (controller.needsContinuousRender() || dirty) {
-        const camMoving = draw();
-        dirty = camMoving; // keep painting until the camera settles
+        const more = draw(now / 1000);
+        dirty = more; // keep painting until camera/shake/punch settle
       }
       raf = requestAnimationFrame(loop);
     };
