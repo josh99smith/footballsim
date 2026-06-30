@@ -5,14 +5,15 @@ import {
   pickOffense,
   type Philosophy,
 } from "./sim/coordinator";
-import { DEFAULT_CONFIG, GameFlow, type GameConfig, type GameInfo } from "./sim/game";
+import { DEFAULT_CONFIG, GameFlow, type CommitOutcome, type GameConfig, type GameInfo } from "./sim/game";
 import { PlaySim } from "./sim/engine";
 import { RNG } from "./sim/rng";
 import { DEFAULT_TEAMS, type Team } from "./sim/roster";
 import { DEF_PLAYS, OFF_PLAYS } from "./sim/playbook";
 import { StatsAggregator } from "./stats/aggregator";
-import type { SimEvent, TeamId } from "./sim/types";
+import type { PlayResult, SimEvent, TeamId } from "./sim/types";
 import type { Vec2 } from "./sim/vec2";
+import type { SoundCue } from "./audio/sound";
 
 export type Speed = "pause" | "0.5" | "1" | "2" | "4" | "instant";
 const SPEED_FACTOR: Record<Speed, number> = {
@@ -81,10 +82,22 @@ export interface RenderFrame {
   awayColor: string;
 }
 
+export type BannerTone = "score" | "turnover" | "info";
+
+export interface Banner {
+  /** Unique per emission so the UI can re-trigger the animation. */
+  id: number;
+  tone: BannerTone;
+  title: string;
+  sub: string;
+  team: TeamId | null;
+}
+
 /** Discrete state mirrored into React. Per-frame motion is NOT here. */
 export interface UIState {
   phase: Phase;
   info: GameInfo;
+  banner: Banner | null;
   homeName: string;
   awayName: string;
   homeAbbr: string;
@@ -124,6 +137,13 @@ export class GameController {
   private lastPlayText = "Kickoff. Game on.";
   private pbp: PbpEntry[] = [];
   private startBallOn = 25;
+  private banner: Banner | null = null;
+  private bannerSeq = 0;
+
+  // sound cues queued for the renderer to drain & play
+  private soundCues: SoundCue[] = [];
+  // snap cadence: brief pre-snap hold before the sim starts stepping
+  private holdRemaining = 0;
 
   // interpolation buffers (local frame positions)
   private prevPos = new Map<string, Vec2>();
@@ -184,6 +204,8 @@ export class GameController {
     this.lastPlayText = "Kickoff. Game on.";
     this.trails.clear();
     this.effects = [];
+    this.banner = null;
+    this.soundCues = [];
     this.beginPlaySelection();
   }
 
@@ -207,6 +229,11 @@ export class GameController {
     if (!this.live || !this.sim || this.speed === "instant") return;
     const factor = SPEED_FACTOR[this.speed];
     if (factor <= 0) return; // paused
+    // Snap cadence: hold on the set formation briefly before the ball moves.
+    if (this.holdRemaining > 0) {
+      this.holdRemaining -= dtWall;
+      return;
+    }
     this.accumulator += dtWall * 60 * factor;
     let guard = 0;
     while (this.accumulator >= 1 && this.live && this.sim && guard < 600) {
@@ -249,16 +276,26 @@ export class GameController {
     };
     for (const e of events) {
       switch (e.t) {
-        case "catch": add("catch", at(e.by)); break;
-        case "tackle": add("tackle", at(e.carrier)); break;
-        case "sack": add("sack", at(e.carrier), 48); break;
-        case "breakTackle": add("breakTackle", at(e.carrier)); break;
+        case "snap": this.soundCues.push("snap"); break;
+        case "catch": add("catch", at(e.by)); this.soundCues.push("catch"); break;
+        case "tackle": add("tackle", at(e.carrier)); this.soundCues.push("hit"); break;
+        case "sack": add("sack", at(e.carrier), 48); this.soundCues.push("hit"); break;
+        case "breakTackle": add("breakTackle", at(e.carrier)); this.soundCues.push("hit"); break;
         case "touchdown": add("touchdown", at(e.by), 60); break;
+        case "interception": this.soundCues.push("turnover"); break;
         case "incomplete":
           add("incomplete", this.sim.ball.target ? { ...this.sim.ball.target } : null);
           break;
       }
     }
+  }
+
+  /** Drained by the renderer each frame; returns and clears queued sound cues. */
+  takeSoundCues(): SoundCue[] {
+    if (this.soundCues.length === 0) return [];
+    const out = this.soundCues;
+    this.soundCues = [];
+    return out;
   }
 
   private ageEffects(): void {
@@ -431,6 +468,7 @@ export class GameController {
     this.live = true;
     this.phase = "live";
     this.accumulator = 0;
+    this.holdRemaining = this.speed === "instant" ? 0 : 0.45;
     if (this.speed === "instant") {
       this.finishInstant();
     } else {
@@ -463,6 +501,7 @@ export class GameController {
     this.stats.recordScores(this.flow.score.home, this.flow.score.away);
     this.lastPlayText = commit.text;
     this.logPbp(offTeam, commit.text);
+    this.makeBanner(offTeam, commit, result);
     this.phase = "result";
     this.publish();
     // Advance to the next selection (field stays frozen on the final frame).
@@ -476,7 +515,48 @@ export class GameController {
     this.stats.recordScores(this.flow.score.home, this.flow.score.away);
     this.lastPlayText = commit.text;
     this.logPbp(offTeam, commit.text);
+    this.makeBanner(offTeam, commit, null);
     this.beginPlaySelection();
+  }
+
+  /** Build the transient broadcast banner + closing sound for a play. */
+  private makeBanner(offTeam: TeamId, commit: CommitOutcome, result: PlayResult | null): void {
+    const abbr = (t: TeamId) => this.teams[t].abbr;
+    let banner: Omit<Banner, "id">;
+    if (commit.isScore) {
+      const s = commit.isScore;
+      const titles: Record<typeof s.type, string> = {
+        TD: "TOUCHDOWN", FG: "FIELD GOAL", SAFETY: "SAFETY", XP: "EXTRA POINT",
+      };
+      banner = { tone: "score", title: titles[s.type], sub: this.teams[s.team].name, team: s.team };
+      this.soundCues.push("cheer");
+    } else if (commit.changedPossession) {
+      const turnover = /INTERCEPT/i.test(commit.text)
+        ? "INTERCEPTED"
+        : /downs/i.test(commit.text)
+          ? "TURNOVER ON DOWNS"
+          : /Punt/i.test(commit.text)
+            ? "PUNT"
+            : "TURNOVER";
+      banner = { tone: "turnover", title: turnover, sub: `${abbr(this.flow.possession)} ball`, team: this.flow.possession };
+      this.soundCues.push("whistle");
+    } else if (result) {
+      // Ordinary scrimmage result card.
+      const yds = Math.round(result.yards);
+      let title: string;
+      if (result.endReason === "sack") title = `SACK -${Math.abs(yds)}`;
+      else if (result.endReason === "incomplete") title = "INCOMPLETE";
+      else if (commit.firstDown) title = "FIRST DOWN";
+      else title = `${yds >= 0 ? "+" : ""}${yds} YD${Math.abs(yds) === 1 ? "" : "S"}`;
+      const verb = result.isPass
+        ? (result.endReason === "incomplete" ? "pass" : "pass complete")
+        : "run";
+      banner = { tone: "info", title, sub: `${abbr(offTeam)} ${verb}`, team: offTeam };
+      this.soundCues.push("whistle");
+    } else {
+      return;
+    }
+    this.banner = { id: ++this.bannerSeq, ...banner };
   }
 
   private logPbp(team: TeamId, text: string): void {
@@ -497,6 +577,7 @@ export class GameController {
     this.emit({
       phase: this.phase,
       info,
+      banner: this.banner,
       homeName: this.teams.home.name,
       awayName: this.teams.away.name,
       homeAbbr: this.teams.home.abbr,

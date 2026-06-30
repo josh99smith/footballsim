@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { controller } from "../store/gameStore";
 import { drawField } from "../render/field";
+import { sound } from "../audio/sound";
 
 /**
  * Owns the requestAnimationFrame loop. Reads sim state straight from the
@@ -35,6 +36,7 @@ export function FieldCanvas() {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       controller.advance(dt);
+      for (const cue of controller.takeSoundCues()) sound.play(cue);
       const frame = controller.renderFrame();
       const rect = wrap.getBoundingClientRect();
       drawField(ctx, rect.width, rect.height, frame, {

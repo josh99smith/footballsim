@@ -2,6 +2,7 @@ import { useState } from "react";
 import { controller, useGame } from "../store/gameStore";
 import type { PlayerStats } from "../stats/aggregator";
 import type { TeamId } from "../sim/types";
+import { iconFor } from "./GameLog";
 
 type Tab = "box" | "drives" | "pbp";
 
@@ -132,6 +133,7 @@ export function StatsPanel() {
         {s.pbp.map((e, i) => (
           <li key={i}>
             <span className="pbp-time">Q{e.quarter} {fmtClock(e.clock)}</span>
+            <span className="pbp-icon">{iconFor(e.text)}</span>
             <span className="pbp-text">{e.text}</span>
           </li>
         ))}

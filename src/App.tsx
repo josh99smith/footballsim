@@ -4,6 +4,7 @@ import { SpeedControls } from "./ui/SpeedControls";
 import { PlaySelectPanel } from "./ui/PlaySelectPanel";
 import { StatsPanel } from "./ui/StatsPanel";
 import { GameLog } from "./ui/GameLog";
+import { Banner } from "./ui/Banner";
 import { useGame } from "./store/gameStore";
 
 export default function App() {
@@ -25,7 +26,10 @@ export default function App() {
         </aside>
 
         <section className="center-col">
-          <FieldCanvas />
+          <div className="field-stage">
+            <FieldCanvas />
+            <Banner />
+          </div>
           <GameLog />
           <SpeedControls />
         </section>

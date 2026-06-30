@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useGame } from "../store/gameStore";
 import type { Speed } from "../controller";
+import { sound } from "../audio/sound";
 
 const SPEEDS: { id: Speed; label: string }[] = [
   { id: "pause", label: "❚❚" },
@@ -14,6 +16,13 @@ export function SpeedControls() {
   const speed = useGame((s) => s.speed);
   const setSpeed = useGame((s) => s.setSpeed);
   const phase = useGame((s) => s.phase);
+  const [muted, setMuted] = useState(sound.muted);
+
+  const toggleMute = () => {
+    const next = !muted;
+    sound.setMuted(next);
+    setMuted(next);
+  };
 
   return (
     <div className="speed-controls">
@@ -28,6 +37,14 @@ export function SpeedControls() {
           {sp.label}
         </button>
       ))}
+      <button
+        className="mute-btn"
+        onClick={toggleMute}
+        aria-pressed={muted}
+        title={muted ? "Unmute" : "Mute"}
+      >
+        {muted ? "🔇" : "🔊"}
+      </button>
     </div>
   );
 }

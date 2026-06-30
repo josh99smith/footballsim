@@ -26,6 +26,7 @@ function initial(): UIState {
       quarter: 1, clock: DEFAULT_CONFIG.quarterSeconds, possession: "home",
       down: 1, distance: 10, ballOn: 25, score: { home: 0, away: 0 }, gameOver: false,
     },
+    banner: null,
     homeName: "", awayName: "", homeAbbr: "", awayAbbr: "",
     homeColor: "#2e6fdb", awayColor: "#d94a3d",
     userTeam: "home", callSide: "offense", isFourthDown: false,
