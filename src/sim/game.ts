@@ -1,6 +1,7 @@
 import { FIELD } from "./constants";
 import { PlaySim, type PlaySetup } from "./engine";
 import { getDefPlay, getOffPlay } from "./playbook";
+import { applyGameplan, NEUTRAL_GAMEPLAN, type Gameplan } from "./gameplan";
 import { RNG } from "./rng";
 import type { Team } from "./roster";
 import type { PlayResult, TeamId } from "./types";
@@ -67,6 +68,8 @@ export class GameFlow {
   gameOver = false;
   /** Accumulated seconds of possession per team (time of possession). */
   top = { home: 0, away: 0 };
+  /** Per-team game plans (rating emphasis). */
+  gameplans: Record<TeamId, Gameplan> = { home: { ...NEUTRAL_GAMEPLAN }, away: { ...NEUTRAL_GAMEPLAN } };
   timeouts = { home: 3, away: 3 };
   pendingConversion: TeamId | null = null;
   /** Set when a timeout/spike should stop the clock on the next play. */
@@ -126,16 +129,24 @@ export class GameFlow {
   createSnap(offPlayId: string, defPlayId: string): PlaySim {
     const offTeam = this.teams[this.possession];
     const defTeam = this.teams[other(this.possession)];
+    const offPlan = this.gameplans[this.possession];
+    const defPlan = this.gameplans[other(this.possession)];
     const setup: PlaySetup = {
       offPlay: getOffPlay(offPlayId),
       defPlay: getDefPlay(defPlayId),
-      offRoster: offTeam.offense,
-      defRoster: defTeam.defense,
+      offRoster: offTeam.offense.map((pl) => ({ ...pl, ratings: applyGameplan(pl.ratings, pl.pos, offPlan) })),
+      defRoster: defTeam.defense.map((pl) => ({ ...pl, ratings: applyGameplan(pl.ratings, pl.pos, defPlan) })),
       ballY: FIELD.WIDTH / 2,
       yardsToGoal: 100 - this.ballOn,
       rng: this.rng,
     };
     return new PlaySim(setup);
+  }
+
+  /** Set a team's game plan (offense axes apply when it has the ball, defense
+   *  axes when it's defending — both live on the same plan object). */
+  setGameplan(team: TeamId, plan: Gameplan): void {
+    this.gameplans[team] = { ...plan };
   }
 
   // ---- applying a scrimmage play result ----

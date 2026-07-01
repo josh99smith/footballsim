@@ -3,6 +3,7 @@ import { controller, useGame } from "../store/gameStore";
 import type { PlayerStats } from "../stats/aggregator";
 import type { TeamId } from "../sim/types";
 import { iconFor } from "./icons";
+import { planSummary } from "../sim/gameplan";
 
 type Tab = "box" | "drives" | "pbp";
 
@@ -53,6 +54,7 @@ export function StatsPanel() {
                 <Row k="Sacks" v={t.sacks} />
                 <div className="tt-row"><span>Penalties</span><span>{t.penalties}-{t.penaltyYards}</span></div>
                 <div className="tt-row"><span>Time of poss.</span><span>{fmtTop(t.topSeconds)}</span></div>
+                <div className="tt-row plan-row"><span>Game plan</span><span>{planSummary(id === s.userTeam ? s.gameplan : s.aiGameplan)}</span></div>
               </div>
             );
           })}

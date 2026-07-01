@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { GameController, type GameSetup, type Speed, type UIState } from "../controller";
 import type { Philosophy } from "../sim/coordinator";
+import { NEUTRAL_GAMEPLAN, type Gameplan } from "../sim/gameplan";
 import { DEFAULT_CONFIG } from "../sim/game";
 import {
   addRecent, clearSavedGame, decodeCode, encodeCode, loadGame, saveGame,
@@ -26,6 +27,7 @@ interface StoreState extends UIState {
   resume: () => void;
   loadCode: (code: string) => boolean;
   shareCode: () => string;
+  confirmHalftime: (plan: Gameplan) => void;
 }
 
 function initial(): UIState {
@@ -46,6 +48,9 @@ function initial(): UIState {
     pbp: [], winner: null,
     seed: 0x5eed1234, difficulty: "normal", quarterSeconds: DEFAULT_CONFIG.quarterSeconds,
     awaitingConversion: false,
+    atHalftime: false,
+    gameplan: { ...NEUTRAL_GAMEPLAN },
+    aiGameplan: { ...NEUTRAL_GAMEPLAN },
   };
 }
 
@@ -69,6 +74,7 @@ export const useGame = create<StoreState>(() => ({
     return true;
   },
   shareCode: () => { const sv = controller.getSave(); return sv ? encodeCode(sv) : ""; },
+  confirmHalftime: (plan) => controller.confirmHalftime(plan),
 }));
 
 // Wire controller -> store. Discrete updates mirror to React and drive autosave.

@@ -2,6 +2,8 @@ import { useState } from "react";
 import { controller, useGame } from "../store/gameStore";
 import type { Difficulty, GameSetup } from "../controller";
 import { getRecents, loadGame } from "../store/persistence";
+import { GameplanControls } from "./GameplanControls";
+import { NEUTRAL_GAMEPLAN } from "../sim/gameplan";
 
 const QUARTERS: { label: string; sec: number }[] = [
   { label: "3 min", sec: 180 },
@@ -119,6 +121,14 @@ export function SetupScreen() {
             </button>
           </div>
           <p className="setup-hint">Same seed + same play calls reproduces the exact game.</p>
+        </div>
+
+        <div className="setup-section">
+          <label className="setup-label">Pre-game plan</label>
+          <GameplanControls
+            value={setup.gameplan ?? NEUTRAL_GAMEPLAN}
+            onChange={(g) => patch({ gameplan: g })}
+          />
         </div>
 
         <button className="primary big" onClick={() => startGame(setup)}>

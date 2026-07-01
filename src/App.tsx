@@ -5,6 +5,7 @@ import { PlaySheet } from "./ui/PlaySheet";
 import { Banner } from "./ui/Banner";
 import { StatsOverlay } from "./ui/StatsOverlay";
 import { GameOverOverlay } from "./ui/GameOverOverlay";
+import { HalftimeOverlay } from "./ui/HalftimeOverlay";
 import { SetupScreen } from "./ui/SetupScreen";
 import { KeyboardControls } from "./ui/KeyboardControls";
 import { useGame } from "./store/gameStore";
@@ -29,6 +30,7 @@ export default function App() {
       <PlaySheet />
       <BottomDock />
       <StatsOverlay />
+      <HalftimeOverlay />
       <GameOverOverlay />
     </div>
   );

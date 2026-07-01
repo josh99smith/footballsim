@@ -19,6 +19,7 @@ function playOut(c: GameController): UIState {
   c.startGame(setup(4242));
   let guard = 0;
   while (state.phase !== "gameOver" && guard++ < 4000) {
+    if (state.atHalftime) { c.confirmHalftime({ air: 0, explosive: 0, coverage: 0, pressure: 0 }); continue; }
     if (state.awaitingConversion) { c.userConvert("xp"); continue; }
     if (state.callSide === "offense") c.userPickOffense("inside-zone");
     else if (state.callSide === "defense") c.userPickDefense("cover3-base");

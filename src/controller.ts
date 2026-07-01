@@ -10,6 +10,7 @@ import { PlaySim } from "./sim/engine";
 import { RNG } from "./sim/rng";
 import { DEFAULT_TEAMS, type Team } from "./sim/roster";
 import { DEF_PLAYS, OFF_PLAYS } from "./sim/playbook";
+import { NEUTRAL_GAMEPLAN, deriveAiGameplan, type Gameplan } from "./sim/gameplan";
 import { StatsAggregator } from "./stats/aggregator";
 import type { PlayResult, SimEvent, TeamId } from "./sim/types";
 import type { Vec2 } from "./sim/vec2";
@@ -20,7 +21,7 @@ const SPEED_FACTOR: Record<Speed, number> = {
   pause: 0, "0.5": 0.5, "1": 1, "2": 2, "4": 4, instant: 0,
 };
 
-export type Phase = "setup" | "preSnap" | "live" | "result" | "conversion" | "gameOver";
+export type Phase = "setup" | "preSnap" | "live" | "result" | "conversion" | "halftime" | "gameOver";
 
 export type Difficulty = "easy" | "normal" | "hard";
 
@@ -30,12 +31,14 @@ export interface GameSetup {
   difficulty: Difficulty;
   home: { name: string; abbr: string; color: string };
   away: { name: string; abbr: string; color: string };
+  /** Optional so older saves / share codes still load (defaults to neutral). */
+  gameplan?: Gameplan;
 }
 
 /** A recorded user action. Replaying these from the setup reconstructs the
  *  exact game (the sim + AI are deterministic given the seed). */
 export interface GameInput {
-  t: "off" | "def" | "st" | "convert" | "clock" | "timeout";
+  t: "off" | "def" | "st" | "convert" | "clock" | "timeout" | "plan";
   v?: string;
 }
 
@@ -147,6 +150,11 @@ export interface UIState {
   quarterSeconds: number;
   /** True when the user owes a conversion choice (XP vs two-point). */
   awaitingConversion: boolean;
+  /** True while paused at halftime for adjustments. */
+  atHalftime: boolean;
+  /** The user team's current game plan. */
+  gameplan: Gameplan;
+  aiGameplan: Gameplan;
 }
 
 type Emit = (s: UIState) => void;
@@ -164,6 +172,9 @@ export class GameController {
   private seed: number;
   private cfg: GameConfig;
   private difficulty: Difficulty = "normal";
+  private gameplan: Gameplan = { ...NEUTRAL_GAMEPLAN }; // user (home) plan
+  private aiGameplan: Gameplan = { ...NEUTRAL_GAMEPLAN };
+  private atHalftime = false;
   private lastQuarter = 1;
   private twoMinShown = false;
   // replay / persistence
@@ -221,11 +232,16 @@ export class GameController {
     this.seed = setup.seed >>> 0;
     this.cfg = { quarterSeconds: setup.quarterSeconds };
     this.difficulty = setup.difficulty;
+    this.gameplan = { ...NEUTRAL_GAMEPLAN, ...(setup.gameplan ?? {}) };
+    this.aiGameplan = deriveAiGameplan(this.seed);
     this.teams = buildTeams(setup);
     this.flow = new GameFlow(this.teams, new RNG(this.seed ^ 0xabcdef), this.cfg);
+    this.flow.setGameplan("home", this.gameplan);
+    this.flow.setGameplan("away", this.aiGameplan);
     this.stats = new StatsAggregator(this.teams);
     this.sim = null;
     this.live = false;
+    this.atHalftime = false;
     this.pbp = [];
     this.banner = null;
     this.soundCues = [];
@@ -276,6 +292,7 @@ export class GameController {
       difficulty: this.difficulty,
       home: { name: this.teams.home.name, abbr: this.teams.home.abbr, color: this.teams.home.color },
       away: { name: this.teams.away.name, abbr: this.teams.away.abbr, color: this.teams.away.color },
+      gameplan: { ...this.gameplan },
     };
   }
 
@@ -339,6 +356,7 @@ export class GameController {
         case "clock": this.userClockPlay(inp.v as "kneel" | "spike"); break;
         case "timeout": this.userTimeout(); break;
         case "convert": this.userConvert(inp.v as "xp" | "two"); break;
+        case "plan": this.confirmHalftime(JSON.parse(inp.v!) as Gameplan); break;
       }
       if (this.flow.gameOver) break;
     }
@@ -659,6 +677,27 @@ export class GameController {
     this.phase = "result";
     this.publish();
     // Advance to the next selection (field stays frozen on the final frame).
+    this.continueOrPause();
+  }
+
+  /** After a play, either pause for halftime adjustments or set up the next down. */
+  private continueOrPause(): void {
+    if (this.atHalftime) {
+      this.phase = "halftime";
+      this.live = false;
+      this.publish();
+      return;
+    }
+    this.beginPlaySelection();
+  }
+
+  /** Confirm halftime adjustments (recorded for replay) and resume. */
+  confirmHalftime(plan: Gameplan): void {
+    if (this.phase !== "halftime") return;
+    this.gameplan = { ...NEUTRAL_GAMEPLAN, ...plan };
+    this.flow.setGameplan("home", this.gameplan);
+    this.record({ t: "plan", v: JSON.stringify(this.gameplan) });
+    this.atHalftime = false;
     this.beginPlaySelection();
   }
 
@@ -704,7 +743,7 @@ export class GameController {
     this.applyGameMoments(true);
     this.phase = "result";
     this.publish();
-    this.beginPlaySelection();
+    this.continueOrPause();
   }
 
   /** Shared tail for non-sim plays (kneel / spike). */
@@ -723,7 +762,7 @@ export class GameController {
     this.applyGameMoments(false);
     this.phase = "result";
     this.publish();
-    this.beginPlaySelection();
+    this.continueOrPause();
   }
 
   /** Halftime / two-minute warning banners (may override the play banner). */
@@ -738,6 +777,7 @@ export class GameController {
           id: ++this.bannerSeq, tone: "info", title: "HALFTIME",
           sub: `${this.teams.home.abbr} ${s.home} – ${s.away} ${this.teams.away.abbr}`, team: null,
         };
+        this.atHalftime = true; // pause for adjustments
         return;
       }
     }
@@ -757,7 +797,7 @@ export class GameController {
     this.logPbp(offTeam, commit.text);
     this.makeBanner(offTeam, commit, null);
     this.applyGameMoments(!!commit.isScore);
-    this.beginPlaySelection();
+    this.continueOrPause();
   }
 
   /** Build the transient broadcast banner + closing sound for a play. */
@@ -911,6 +951,9 @@ export class GameController {
       difficulty: this.difficulty,
       quarterSeconds: this.cfg.quarterSeconds,
       awaitingConversion: this.phase === "conversion",
+      atHalftime: this.phase === "halftime",
+      gameplan: { ...this.gameplan },
+      aiGameplan: { ...this.aiGameplan },
     });
   }
 }

@@ -23,6 +23,7 @@ function playScripted(seed: number): { home: number; away: number; plays: number
   c.startGame(setup(seed));
   let g = 0;
   while (st.phase !== "gameOver" && g++ < 5000) {
+    if (st.atHalftime) { c.confirmHalftime({ air: 0, explosive: 0, coverage: 0, pressure: 0 }); continue; }
     if (st.awaitingConversion) { c.userConvert("xp"); continue; }
     if (st.callSide === "offense") c.userPickOffense("inside-zone");
     else if (st.callSide === "defense") c.userPickDefense("cover3-base");
@@ -31,11 +32,13 @@ function playScripted(seed: number): { home: number; away: number; plays: number
   return { home: st.info.score.home, away: st.info.score.away, plays: st.pbp.length };
 }
 
+// Baselines reflect the AI opponent's seed-derived game plan (which nudges its
+// ratings). Regenerate deliberately when the sim changes intentionally.
 const GOLDEN: Record<number, { home: number; away: number; plays: number }> = {
-  1: { home: 0, away: 7, plays: 21 },
-  7: { home: 0, away: 8, plays: 23 },
-  42: { home: 0, away: 7, plays: 25 },
-  123: { home: 6, away: 7, plays: 25 },
+  1: { home: 7, away: 6, plays: 26 },
+  7: { home: 0, away: 7, plays: 25 },
+  42: { home: 0, away: 14, plays: 24 },
+  123: { home: 0, away: 0, plays: 22 },
 };
 
 describe("golden determinism", () => {
