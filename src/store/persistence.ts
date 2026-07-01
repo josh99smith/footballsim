@@ -1,7 +1,9 @@
 import type { GameSave } from "../controller";
+import type { SeasonState } from "../season/types";
 
 const SAVE_KEY = "gridiron.save.v1";
 const RECENTS_KEY = "gridiron.recents.v1";
+const SEASON_KEY = "gridiron.season.v1";
 
 export interface RecentResult {
   homeAbbr: string;
@@ -67,6 +69,26 @@ export function getRecents(): RecentResult[] {
     return raw ? (JSON.parse(raw) as RecentResult[]) : [];
   } catch {
     return [];
+  }
+}
+
+export function saveSeason(s: SeasonState | null): void {
+  if (!hasStorage()) return;
+  try {
+    if (s) localStorage.setItem(SEASON_KEY, JSON.stringify(s));
+    else localStorage.removeItem(SEASON_KEY);
+  } catch {
+    /* quota / privacy mode — ignore */
+  }
+}
+
+export function loadSeason(): SeasonState | null {
+  if (!hasStorage()) return null;
+  try {
+    const raw = localStorage.getItem(SEASON_KEY);
+    return raw ? (JSON.parse(raw) as SeasonState) : null;
+  } catch {
+    return null;
   }
 }
 
