@@ -58,21 +58,52 @@ export function drawField(
     ctx.fillRect(X(0), Y(yd + 10), fieldW, 10 * scale);
   }
 
+  // Stadium lighting: a soft warm sheen sweeps the turf for depth, brightest
+  // toward the top-centre (as if lit from the near stands).
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(X(0), Y(FIELD.TOTAL_LENGTH), fieldW, fieldH);
+  ctx.clip();
+  const turfLight = ctx.createRadialGradient(
+    w / 2, h * 0.34, 0, w / 2, h * 0.34, Math.max(w, h) * 0.75,
+  );
+  turfLight.addColorStop(0, "rgba(180,255,205,0.12)");
+  turfLight.addColorStop(0.5, "rgba(120,220,160,0.04)");
+  turfLight.addColorStop(1, "rgba(0,20,10,0.16)");
+  ctx.fillStyle = turfLight;
+  ctx.fillRect(X(0), Y(FIELD.TOTAL_LENGTH), fieldW, fieldH);
+  ctx.restore();
+
   // End zones (home at the bottom, away at the top), with team names.
-  ctx.fillStyle = opts.homeEndzone;
-  ctx.fillRect(X(0), Y(FIELD.END_ZONE), fieldW, FIELD.END_ZONE * scale);
-  ctx.fillStyle = opts.awayEndzone;
-  ctx.fillRect(X(0), Y(FIELD.TOTAL_LENGTH), fieldW, FIELD.END_ZONE * scale);
+  const drawEndzone = (fill: string, topYd: number) => {
+    ctx.fillStyle = fill;
+    ctx.fillRect(X(0), Y(topYd), fieldW, FIELD.END_ZONE * scale);
+    // Diagonal sheen for a painted-turf look.
+    const sheen = ctx.createLinearGradient(X(0), Y(topYd), X(FIELD.WIDTH), Y(topYd - FIELD.END_ZONE));
+    sheen.addColorStop(0, "rgba(255,255,255,0.10)");
+    sheen.addColorStop(0.5, "rgba(255,255,255,0.02)");
+    sheen.addColorStop(1, "rgba(0,0,0,0.14)");
+    ctx.fillStyle = sheen;
+    ctx.fillRect(X(0), Y(topYd), fieldW, FIELD.END_ZONE * scale);
+  };
+  drawEndzone(opts.homeEndzone, FIELD.END_ZONE);
+  drawEndzone(opts.awayEndzone, FIELD.TOTAL_LENGTH);
   if (opts.homeAbbr || opts.awayAbbr) {
     ctx.save();
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
     ctx.font = `900 ${Math.round(scale * 5)}px system-ui, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+    ctx.shadowColor = "rgba(0,0,0,0.45)";
+    ctx.shadowBlur = scale * 1.2;
     ctx.fillText(opts.homeAbbr, X(FIELD.WIDTH / 2), Y(FIELD.END_ZONE / 2));
     ctx.fillText(opts.awayAbbr, X(FIELD.WIDTH / 2), Y(FIELD.TOTAL_LENGTH - FIELD.END_ZONE / 2));
     ctx.restore();
   }
+
+  // Goalposts on each end line (stylised top-down slingshot).
+  drawGoalpost(ctx, X, Y, scale, 0, 1);
+  drawGoalpost(ctx, X, Y, scale, FIELD.TOTAL_LENGTH, -1);
 
   // Midfield logo ring at the 50.
   ctx.save();
@@ -258,6 +289,14 @@ export function drawField(
       ctx.stroke();
     }
 
+    // Glossy top rim-light so tokens read as 3D beads under the lights.
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx - r * 0.28, cy - r * 0.34, r * 0.42, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.fill();
+    ctx.restore();
+
     ctx.fillStyle = "#fff";
     ctx.font = `bold ${Math.round(scale * 1.55)}px system-ui, sans-serif`;
     ctx.shadowColor = "rgba(0,0,0,0.55)";
@@ -294,12 +333,67 @@ export function drawField(
 
   for (const fx of frame.effects) drawEffect(ctx, X(fx.y), Y(fx.x), fx, scale, frame.dir);
 
+  // Two soft stadium light pools sweeping the field for atmosphere.
+  ctx.save();
+  ctx.globalCompositeOperation = "overlay";
+  for (const [px, py, rad, str] of [
+    [w * 0.3, h * 0.22, 0.5, 0.16],
+    [w * 0.72, h * 0.6, 0.55, 0.12],
+  ] as const) {
+    const pool = ctx.createRadialGradient(px, py, 0, px, py, Math.max(w, h) * rad);
+    pool.addColorStop(0, `rgba(255,255,240,${str})`);
+    pool.addColorStop(1, "rgba(255,255,240,0)");
+    ctx.fillStyle = pool;
+    ctx.fillRect(0, 0, w, h);
+  }
+  ctx.restore();
+
   // Subtle edge vignette for a broadcast look.
-  const vig = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.72);
+  const vig = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.32, w / 2, h / 2, Math.max(w, h) * 0.74);
   vig.addColorStop(0, "rgba(0,0,0,0)");
-  vig.addColorStop(1, "rgba(0,0,0,0.32)");
+  vig.addColorStop(0.7, "rgba(0,0,0,0.14)");
+  vig.addColorStop(1, "rgba(0,0,0,0.42)");
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, w, h);
+}
+
+/** Stylised top-down goalpost on an end line. `into` = +1/-1 points the
+ *  uprights toward the field of play. */
+function drawGoalpost(
+  ctx: CanvasRenderingContext2D,
+  X: (yd: number) => number,
+  Y: (down: number) => number,
+  scale: number,
+  endYd: number,
+  into: 1 | -1,
+): void {
+  const cw = 3.08; // half goalpost width in yards (~6.16yd total)
+  const cx = FIELD.WIDTH / 2;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "#f5c518";
+  ctx.shadowColor = "rgba(245,197,24,0.6)";
+  ctx.shadowBlur = scale * 1.4;
+  ctx.lineWidth = Math.max(1.5, scale * 0.5);
+  // Support post (behind the end line) → crossbar centre.
+  ctx.beginPath();
+  ctx.moveTo(X(cx), Y(endYd - into * 2.4));
+  ctx.lineTo(X(cx), Y(endYd));
+  ctx.stroke();
+  // Crossbar across the width.
+  ctx.beginPath();
+  ctx.moveTo(X(cx - cw), Y(endYd));
+  ctx.lineTo(X(cx + cw), Y(endYd));
+  ctx.stroke();
+  // Two uprights reaching into the field.
+  for (const s of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(X(cx + s * cw), Y(endYd));
+    ctx.lineTo(X(cx + s * cw), Y(endYd + into * 3.2));
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 /** A small football (rotatable) with a highlight and laces. */
