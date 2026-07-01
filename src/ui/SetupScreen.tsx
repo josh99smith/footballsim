@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { controller, useGame } from "../store/gameStore";
-import type { Difficulty, GameSetup } from "../controller";
+import { buildTeams, type Difficulty, type GameSetup } from "../controller";
 import { getRecents, loadGame } from "../store/persistence";
 import { GameplanControls } from "./GameplanControls";
-import { NEUTRAL_GAMEPLAN } from "../sim/gameplan";
+import { NEUTRAL_GAMEPLAN, deriveAiGameplan } from "../sim/gameplan";
+import { teamRosterView } from "../sim/ratingsView";
+import { useUI } from "../store/uiStore";
 import type { League } from "../sim/rules";
 import { teamsForLeague } from "../sim/teams";
 
@@ -39,7 +41,7 @@ export function SetupScreen() {
 
   const setLeague = (lg: League) => {
     const opts = teamsForLeague(lg);
-    const pick = (o: (typeof opts)[number]) => ({ name: o.name, abbr: o.abbr, color: o.color });
+    const pick = (o: (typeof opts)[number]) => ({ name: o.name, abbr: o.abbr, color: o.color, strength: o.strength });
     setSetup((s) => ({
       ...s, league: lg,
       home: { ...s.home, ...pick(opts[0]) },
@@ -48,7 +50,17 @@ export function SetupScreen() {
   };
   const pickTeam = (side: "home" | "away", id: string) => {
     const o = leagueTeams.find((t) => t.id === id);
-    if (o) patchTeam(side, { name: o.name, abbr: o.abbr, color: o.color });
+    if (o) patchTeam(side, { name: o.name, abbr: o.abbr, color: o.color, strength: o.strength });
+  };
+
+  const openRatingsPreview = useUI((s) => s.openRatingsPreview);
+  const scout = () => {
+    const teams = buildTeams(setup);
+    const plan = setup.gameplan ?? NEUTRAL_GAMEPLAN;
+    openRatingsPreview({
+      home: teamRosterView(teams.home, plan),
+      away: teamRosterView(teams.away, deriveAiGameplan(setup.seed)),
+    });
   };
 
   return (
@@ -217,6 +229,9 @@ export function SetupScreen() {
         )}
 
         <div className="setup-kick">
+          <button className="ghost-btn scout-btn" onClick={scout}>
+            👥 Scout rosters &amp; ratings
+          </button>
           <button className="primary big" onClick={() => startGame(setup)}>
             Kickoff →
           </button>

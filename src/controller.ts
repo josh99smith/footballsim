@@ -8,9 +8,10 @@ import {
 import { DEFAULT_CONFIG, GameFlow, type CommitOutcome, type GameConfig, type GameInfo, type PenaltyKind } from "./sim/game";
 import { PlaySim } from "./sim/engine";
 import { RNG } from "./sim/rng";
-import { DEFAULT_TEAMS, type Team } from "./sim/roster";
+import { DEFAULT_TEAMS, generateTeam, hashStr, type Team } from "./sim/roster";
 import { DEF_PLAYS, OFF_PLAYS } from "./sim/playbook";
 import { NEUTRAL_GAMEPLAN, deriveAiGameplan, type Gameplan } from "./sim/gameplan";
+import { teamRosterView, type RostersView } from "./sim/ratingsView";
 import type { League } from "./sim/rules";
 import { StatsAggregator } from "./stats/aggregator";
 import type { PlayResult, SimEvent, TeamId } from "./sim/types";
@@ -32,8 +33,8 @@ export interface GameSetup {
   difficulty: Difficulty;
   /** Optional so older saves / share codes still load (defaults to pro). */
   league?: League;
-  home: { name: string; abbr: string; color: string };
-  away: { name: string; abbr: string; color: string };
+  home: { name: string; abbr: string; color: string; strength?: number };
+  away: { name: string; abbr: string; color: string; strength?: number };
   /** Optional so older saves / share codes still load (defaults to neutral). */
   gameplan?: Gameplan;
 }
@@ -158,6 +159,8 @@ export interface UIState {
   /** The user team's current game plan. */
   gameplan: Gameplan;
   aiGameplan: Gameplan;
+  /** Both rosters with base → game-plan-adjusted ratings (scouting overlay). */
+  rosters: RostersView;
 }
 
 type Emit = (s: UIState) => void;
@@ -961,6 +964,10 @@ export class GameController {
       atHalftime: this.phase === "halftime",
       gameplan: { ...this.gameplan },
       aiGameplan: { ...this.aiGameplan },
+      rosters: {
+        home: teamRosterView(this.teams.home, this.gameplan),
+        away: teamRosterView(this.teams.away, this.aiGameplan),
+      },
     });
   }
 }
@@ -968,28 +975,35 @@ export class GameController {
 const offPlayLabel = (id: string): string => OFF_PLAYS.find((p) => p.id === id)?.name ?? id;
 const defPlayLabel = (id: string): string => DEF_PLAYS.find((p) => p.id === id)?.name ?? id;
 
-const RATINGS_KEYS = [
-  "speed", "strength", "agility", "awareness", "catching", "tackling", "blocking",
-] as const;
+/** Fallback strength for a custom team: stable, derived from its identity so a
+ *  named team always plays the same, centred near mid-tier (68..80). */
+function customStrength(name: string, abbr: string): number {
+  return 68 + (hashStr(`${abbr}|${name}`) % 13); // 68..80
+}
 
-/** Build teams from a setup: apply name/abbr/color overrides + difficulty. */
-function buildTeams(setup: GameSetup): { home: Team; away: Team } {
-  const t = DEFAULT_TEAMS(setup.seed);
-  const apply = (team: Team, ov: GameSetup["home"]) => {
-    if (ov.name.trim()) team.name = ov.name.trim();
-    if (ov.abbr.trim()) team.abbr = ov.abbr.trim().toUpperCase().slice(0, 4);
-    if (ov.color.trim()) team.color = ov.color.trim();
-  };
-  apply(t.home, setup.home);
-  apply(t.away, setup.away);
-  // Difficulty handicaps the AI (away) team's ratings.
-  const delta = setup.difficulty === "easy" ? -7 : setup.difficulty === "hard" ? 7 : 0;
-  if (delta !== 0) {
-    for (const p of [...t.away.offense, ...t.away.defense]) {
-      for (const k of RATINGS_KEYS) {
-        p.ratings[k] = Math.max(35, Math.min(99, p.ratings[k] + delta));
-      }
-    }
+/** Build teams from a setup: each side is generated from its own identity +
+ *  strength so it is reproducible and distinct. Difficulty folds into the AI
+ *  (away) team's strength rather than a post-hoc rating patch. */
+export function buildTeams(setup: GameSetup): { home: Team; away: Team } {
+  if (!setup.home.name.trim() && !setup.away.name.trim()) {
+    // No teams chosen at all — fall back to the built-in defaults.
+    return DEFAULT_TEAMS(setup.seed);
   }
-  return t;
+  const delta = setup.difficulty === "easy" ? -7 : setup.difficulty === "hard" ? 7 : 0;
+
+  const make = (id: TeamId, ov: GameSetup["home"], salt: number, strengthDelta: number): Team => {
+    const name = ov.name.trim() || (id === "home" ? "Riverside Surge" : "Granite City Wolves");
+    const abbr = (ov.abbr.trim() || name.slice(0, 3)).toUpperCase().slice(0, 4);
+    const color = ov.color.trim() || (id === "home" ? "#2e6fdb" : "#d94a3d");
+    const baseStrength = ov.strength ?? customStrength(name, abbr);
+    const strength = Math.max(55, Math.min(95, baseStrength + strengthDelta));
+    // Distinct, reproducible per-team seed from identity.
+    const teamSeed = (setup.seed ^ hashStr(`${abbr}:${name}`) ^ salt) >>> 0;
+    return generateTeam(id, name, abbr, color, teamSeed, strength);
+  };
+
+  return {
+    home: make("home", setup.home, 0x1111, 0),
+    away: make("away", setup.away, 0x2222, delta),
+  };
 }

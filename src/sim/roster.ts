@@ -25,11 +25,13 @@ const LAST = [
   "Beck", "Nash", "Rhodes", "Tate", "Fox", "Cole", "Day", "Knox",
 ];
 
-function makeRatings(rng: RNG, pos: Position): Ratings {
+/** teamShift moves the whole roster up/down (team strength); quality is a
+ *  per-player modifier so a unit has studs and scrubs. */
+function makeRatings(rng: RNG, pos: Position, teamShift: number, quality: number): Ratings {
   const p = PROFILES[pos];
   const def = (key: keyof Ratings): number => {
-    const target = (p[key] as number | undefined) ?? p.base;
-    return Math.round(Math.max(35, Math.min(99, target + rng.gaussian() * 7)));
+    const target = ((p[key] as number | undefined) ?? p.base) + teamShift + quality * 7;
+    return Math.round(Math.max(35, Math.min(99, target + rng.gaussian() * 6)));
   };
   return {
     speed: def("speed"),
@@ -59,41 +61,57 @@ export interface Team {
   defense: PlayerDef[];
 }
 
-function buildUnit(rng: RNG, positions: Position[], prefix: string): PlayerDef[] {
+function buildUnit(rng: RNG, positions: Position[], prefix: string, teamShift: number): PlayerDef[] {
   const used = new Set<number>();
+  const star = rng.int(0, positions.length - 1); // one standout per unit
   return positions.map((pos, i) => {
     let number = rng.int(1, 99);
     while (used.has(number)) number = rng.int(1, 99);
     used.add(number);
+    // Studs and scrubs: most near average, the star clearly elevated.
+    const quality = i === star ? 1.3 + rng.range(0, 0.6) : rng.gaussian() * 0.5;
     return {
       id: `${prefix}-${i}`,
       number,
       name: `${rng.pick(FIRST)} ${rng.pick(LAST)}`,
       pos,
-      ratings: makeRatings(rng, pos),
+      ratings: makeRatings(rng, pos, teamShift, quality),
     };
   });
 }
 
+/** Overall team rating target (~55 weak … ~90 elite). Roster shifts toward it. */
 export function generateTeam(
   id: TeamId,
   name: string,
   abbr: string,
   color: string,
   seed: number,
+  strength = 75,
 ): Team {
   const rng = new RNG(seed);
+  const teamShift = Math.max(-18, Math.min(16, strength - 75));
   return {
     id,
     name,
     abbr,
     color,
-    offense: buildUnit(rng, OFFENSE, `${id}-o`),
-    defense: buildUnit(rng, DEFENSE, `${id}-d`),
+    offense: buildUnit(rng, OFFENSE, `${id}-o`, teamShift),
+    defense: buildUnit(rng, DEFENSE, `${id}-d`, teamShift),
   };
 }
 
+/** Stable 32-bit hash of a string (for per-team deterministic seeding). */
+export function hashStr(s: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0;
+}
+
 export const DEFAULT_TEAMS = (seed: number): { home: Team; away: Team } => ({
-  home: generateTeam("home", "Riverside Surge", "RIV", "#2e6fdb", seed ^ 0x1111),
-  away: generateTeam("away", "Granite City Wolves", "GCW", "#d94a3d", seed ^ 0x2222),
+  home: generateTeam("home", "Riverside Surge", "RIV", "#2e6fdb", seed ^ 0x1111, 75),
+  away: generateTeam("away", "Granite City Wolves", "GCW", "#d94a3d", seed ^ 0x2222, 75),
 });

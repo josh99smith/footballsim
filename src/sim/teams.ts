@@ -1,4 +1,5 @@
 import type { League } from "./rules";
+import { hashStr } from "./roster";
 
 export interface TeamOption {
   id: string;
@@ -6,10 +7,12 @@ export interface TeamOption {
   abbr: string;
   color: string;
   league: League;
+  /** Overall team strength target (~62 underdog … ~90 elite). */
+  strength: number;
 }
 
 /** Pro league — real cities, original mascots, authentic colour schemes. */
-export const PRO_TEAMS: Omit<TeamOption, "league">[] = [
+export const PRO_TEAMS: Omit<TeamOption, "league" | "strength">[] = [
   { id: "azn", name: "Arizona Scorpions", abbr: "ARI", color: "#97233A" },
   { id: "atl", name: "Atlanta Firebirds", abbr: "ATL", color: "#A71930" },
   { id: "bal", name: "Baltimore Blackbirds", abbr: "BAL", color: "#241773" },
@@ -45,7 +48,7 @@ export const PRO_TEAMS: Omit<TeamOption, "league">[] = [
 ];
 
 /** College league — real regions, original mascots, authentic colours. */
-export const COLLEGE_TEAMS: Omit<TeamOption, "league">[] = [
+export const COLLEGE_TEAMS: Omit<TeamOption, "league" | "strength">[] = [
   { id: "ala", name: "Alabama Ironmen", abbr: "ALA", color: "#9E1B32" },
   { id: "aub", name: "Auburn Plainsmen", abbr: "AUB", color: "#DD550C" },
   { id: "cle_c", name: "Clemson Paws", abbr: "CLM", color: "#F56600" },
@@ -72,6 +75,20 @@ export const COLLEGE_TEAMS: Omit<TeamOption, "league">[] = [
   { id: "wisc", name: "Wisconsin Diggers", abbr: "WIS", color: "#C5050C" },
 ];
 
+// Curated tiers give the leagues contenders and underdogs; everyone else is
+// mid-tier with a small stable variation so no two feel identical.
+const ELITE = new Set(["kc", "phi", "buf", "sf", "bal", "uga", "ala", "ohio", "mich", "tex"]);
+const STRONG = new Set(["det", "gb", "dal", "mia", "cin", "ore", "psu", "nd", "lsu", "tenn_c", "okla"]);
+const WEAK = new Set(["car", "ne", "nyg", "ten", "lv", "iowa", "utah", "wisc", "msu", "wash"]);
+
+export function teamStrength(id: string): number {
+  if (ELITE.has(id)) return 88;
+  if (STRONG.has(id)) return 82;
+  if (WEAK.has(id)) return 67;
+  return 74 + (hashStr(id) % 7) - 3; // 71..77
+}
+
 export function teamsForLeague(league: League): Omit<TeamOption, "league">[] {
-  return league === "college" ? COLLEGE_TEAMS : PRO_TEAMS;
+  const base = league === "college" ? COLLEGE_TEAMS : PRO_TEAMS;
+  return base.map((t) => ({ ...t, strength: teamStrength(t.id) }));
 }
