@@ -44,9 +44,12 @@ export function drawField(
   const fieldW = FIELD.WIDTH * scale;
   const fieldH = FIELD.TOTAL_LENGTH * scale;
 
+  // Orientation: flip the whole field 180° so the team ON OFFENSE always drives
+  // toward the top of the screen (the camera swaps ends when you're defending).
+  const orient = frame?.dir ?? 1;
   // width yard -> screen X; downfield yard -> screen Y (inverted, up = +downfield)
-  const X = (yd: number): number => w / 2 + (yd - cam.cy) * scale;
-  const Y = (down: number): number => h / 2 - (down - cam.cx) * scale;
+  const X = (yd: number): number => w / 2 + orient * (yd - cam.cy) * scale;
+  const Y = (down: number): number => h / 2 - orient * (down - cam.cx) * scale;
 
   // Turf.
   ctx.fillStyle = "#1f7a3d";
@@ -263,45 +266,34 @@ export function drawField(
       ctx.fill();
     }
 
+    // Both sides render as round beads (distinguished by team colour). The
+    // defense keeps a slightly darker ring so units still read apart at a glance.
     const light = shade(a.color, 1.35);
     const dark = shade(a.color, 0.7);
-    if (a.side === "off") {
-      const g = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.4, r * 0.1, cx, cy, r * 1.1);
-      g.addColorStop(0, light);
-      g.addColorStop(1, dark);
+    const g = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.4, r * 0.1, cx, cy, r * 1.1);
+    g.addColorStop(0, light);
+    g.addColorStop(1, dark);
+    ctx.beginPath();
+    ctx.fillStyle = g;
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = Math.max(1, scale * 0.28);
+    ctx.strokeStyle = a.side === "off" ? "rgba(255,255,255,0.85)" : "rgba(20,24,30,0.85)";
+    ctx.stroke();
+    // A small facing tick shows each player's heading (orient-aware).
+    if (a.moving) {
+      const hd = Math.atan2(-orient * a.vx, orient * a.vy);
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(hd);
+      ctx.fillStyle = a.side === "off" ? "rgba(255,255,255,0.92)" : "rgba(15,18,24,0.9)";
       ctx.beginPath();
-      ctx.fillStyle = g;
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.moveTo(r * 1.02, 0);
+      ctx.lineTo(r * 0.52, r * 0.34);
+      ctx.lineTo(r * 0.52, -r * 0.34);
+      ctx.closePath();
       ctx.fill();
-      ctx.lineWidth = Math.max(1, scale * 0.28);
-      ctx.strokeStyle = "rgba(255,255,255,0.85)";
-      ctx.stroke();
-      // A small facing tick so ball-handlers/blockers show their heading too.
-      if (a.moving) {
-        const hd = Math.atan2(-a.vx, a.vy);
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(hd);
-        ctx.fillStyle = "rgba(255,255,255,0.92)";
-        ctx.beginPath();
-        ctx.moveTo(r * 1.02, 0);
-        ctx.lineTo(r * 0.52, r * 0.34);
-        ctx.lineTo(r * 0.52, -r * 0.34);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-      }
-    } else {
-      const screenHeading = a.moving ? Math.atan2(-a.vx, a.vy) : -Math.PI / 2;
-      drawChevron(ctx, cx, cy, r * 1.28, screenHeading);
-      const g = ctx.createLinearGradient(cx, cy - r, cx, cy + r);
-      g.addColorStop(0, light);
-      g.addColorStop(1, dark);
-      ctx.fillStyle = g;
-      ctx.fill();
-      ctx.lineWidth = Math.max(1, scale * 0.28);
-      ctx.strokeStyle = "rgba(255,255,255,0.8)";
-      ctx.stroke();
+      ctx.restore();
     }
 
     // Glossy top rim-light so tokens read as 3D beads under the lights.
@@ -445,21 +437,6 @@ function drawFootball(ctx: CanvasRenderingContext2D, x: number, y: number, r: nu
     ctx.lineTo(r * 0.16, i * r * 0.2);
     ctx.stroke();
   }
-  ctx.restore();
-}
-
-function drawChevron(
-  ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, heading: number,
-): void {
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(heading);
-  ctx.beginPath();
-  ctx.moveTo(size, 0);
-  ctx.lineTo(-size * 0.7, size * 0.85);
-  ctx.lineTo(-size * 0.3, 0);
-  ctx.lineTo(-size * 0.7, -size * 0.85);
-  ctx.closePath();
   ctx.restore();
 }
 
