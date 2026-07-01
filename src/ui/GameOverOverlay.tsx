@@ -1,4 +1,5 @@
 import { controller, useGame } from "../store/gameStore";
+import { useSeason } from "../store/seasonStore";
 import type { TeamId } from "../sim/types";
 
 /** Full-screen final summary with stat leaders. */
@@ -6,6 +7,7 @@ export function GameOverOverlay() {
   const s = useGame();
   const newGame = useGame((g) => g.newGame);
   const shareCode = useGame((g) => g.shareCode);
+  const finishGame = useSeason((g) => g.finishGame);
   if (s.phase !== "gameOver") return null;
 
   const w = s.winner;
@@ -29,8 +31,14 @@ export function GameOverOverlay() {
         <p className="final-score">{s.homeAbbr} {s.info.score.home} — {s.info.score.away} {s.awayAbbr}</p>
         <Leaders />
         <div className="gameover-actions">
-          <button className="primary big" onClick={newGame}>New Game</button>
-          <button className="ghost-btn" onClick={share}>⤴ Share game code</button>
+          {s.seasonGame ? (
+            <button className="primary big" onClick={finishGame}>Continue season →</button>
+          ) : (
+            <>
+              <button className="primary big" onClick={newGame}>New Game</button>
+              <button className="ghost-btn" onClick={share}>⤴ Share game code</button>
+            </>
+          )}
         </div>
       </div>
     </div>

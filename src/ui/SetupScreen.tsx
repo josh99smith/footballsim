@@ -6,6 +6,8 @@ import { GameplanControls } from "./GameplanControls";
 import { NEUTRAL_GAMEPLAN, deriveAiGameplan } from "../sim/gameplan";
 import { teamRosterView } from "../sim/ratingsView";
 import { useUI } from "../store/uiStore";
+import { useSeason } from "../store/seasonStore";
+import { SeasonStart } from "./season/SeasonStart";
 import type { League } from "../sim/rules";
 import { teamsForLeague } from "../sim/teams";
 
@@ -63,9 +65,27 @@ export function SetupScreen() {
     });
   };
 
+  const [mode, setMode] = useState<"exhibition" | "season">("exhibition");
+  const hasSeason = useSeason((s) => !!s.season);
+
   return (
     <div className="setup">
       <div className="setup-card panel">
+        <div className="mode-toggle">
+          <button className={`chip ${mode === "exhibition" ? "active" : ""}`} onClick={() => setMode("exhibition")}>Exhibition</button>
+          <button className={`chip ${mode === "season" ? "active" : ""}`} onClick={() => setMode("season")}>
+            Season{hasSeason ? " ●" : ""}
+          </button>
+        </div>
+
+        {mode === "season" ? (
+          <>
+            <h2>Season Mode</h2>
+            <p className="setup-tagline">Take a franchise through a full season — players develop and decline every offseason.</p>
+            <SeasonStart onCancel={() => setMode("exhibition")} />
+          </>
+        ) : (
+        <>
         <h2>New Game</h2>
         <p className="setup-tagline">You coach the home team. Set the matchup and kick off.</p>
 
@@ -236,6 +256,8 @@ export function SetupScreen() {
             Kickoff →
           </button>
         </div>
+        </>
+        )}
       </div>
     </div>
   );

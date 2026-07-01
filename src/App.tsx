@@ -9,10 +9,27 @@ import { GameOverOverlay } from "./ui/GameOverOverlay";
 import { HalftimeOverlay } from "./ui/HalftimeOverlay";
 import { SetupScreen } from "./ui/SetupScreen";
 import { KeyboardControls } from "./ui/KeyboardControls";
+import { SeasonHub } from "./ui/season/SeasonHub";
+import { OffseasonScreen } from "./ui/season/OffseasonScreen";
 import { useGame } from "./store/gameStore";
+import { useSeason } from "./store/seasonStore";
 
 export default function App() {
   const phase = useGame((s) => s.phase);
+  const seasonView = useSeason((s) => s.view);
+  const seasonPlaying = useSeason((s) => s.playing);
+
+  if (seasonView === "offseason") {
+    return <div className="app-setup"><OffseasonScreen /></div>;
+  }
+  if (seasonView === "hub" && !seasonPlaying) {
+    return (
+      <div className="app-setup">
+        <SeasonHub />
+        <RatingsOverlay />
+      </div>
+    );
+  }
 
   if (phase === "setup") {
     return (
