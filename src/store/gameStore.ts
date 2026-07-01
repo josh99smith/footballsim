@@ -55,6 +55,7 @@ function initial(): UIState {
       home: { name: "", abbr: "", color: "#2e6fdb", offense: [], defense: [], ovr: 0 },
       away: { name: "", abbr: "", color: "#d94a3d", offense: [], defense: [], ovr: 0 },
     },
+    seasonGame: false,
   };
 }
 
@@ -88,16 +89,21 @@ controller.onChange((s: UIState) => {
   if (s.phase === "gameOver") {
     if (!recordedOver) {
       recordedOver = true;
-      addRecent({
-        homeAbbr: s.homeAbbr, awayAbbr: s.awayAbbr,
-        homeScore: s.info.score.home, awayScore: s.info.score.away,
-        seed: s.seed, when: Date.now(),
-      });
+      // Season results are recorded by the season store, not the recents list.
+      if (!s.seasonGame) {
+        addRecent({
+          homeAbbr: s.homeAbbr, awayAbbr: s.awayAbbr,
+          homeScore: s.info.score.home, awayScore: s.info.score.away,
+          seed: s.seed, when: Date.now(),
+        });
+      }
       clearSavedGame(); // a finished game isn't resumable
     }
   } else {
     recordedOver = false;
-    if (s.phase !== "setup") {
+    // Season games aren't autosaved to the single-game slot (the season store
+    // owns season persistence); this keeps the exhibition "Resume" accurate.
+    if (s.phase !== "setup" && !s.seasonGame) {
       const sv = controller.getSave();
       if (sv) saveGame(sv);
     }

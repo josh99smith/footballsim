@@ -161,6 +161,8 @@ export interface UIState {
   aiGameplan: Gameplan;
   /** Both rosters with base → game-plan-adjusted ratings (scouting overlay). */
   rosters: RostersView;
+  /** True when this game is being played inside Season mode. */
+  seasonGame: boolean;
 }
 
 type Emit = (s: UIState) => void;
@@ -182,6 +184,7 @@ export class GameController {
   private gameplan: Gameplan = { ...NEUTRAL_GAMEPLAN }; // user (home) plan
   private aiGameplan: Gameplan = { ...NEUTRAL_GAMEPLAN };
   private atHalftime = false;
+  private seasonGame = false;
   private lastQuarter = 1;
   private twoMinShown = false;
   // replay / persistence
@@ -232,8 +235,10 @@ export class GameController {
     this.phase = "setup";
   }
 
-  /** Apply a setup config and kick off a fresh game. */
-  startGame(setup: GameSetup): void {
+  /** Apply a setup config and kick off a fresh game. An optional teams override
+   *  (used by Season mode) injects pre-built rosters instead of generating them
+   *  from the setup, so persisted, progressed rosters carry into the game. */
+  startGame(setup: GameSetup, teamsOverride?: { home: Team; away: Team }): void {
     this.setup = { ...setup, home: { ...setup.home }, away: { ...setup.away } };
     this.inputs = [];
     this.seed = setup.seed >>> 0;
@@ -242,7 +247,8 @@ export class GameController {
     this.difficulty = setup.difficulty;
     this.gameplan = { ...NEUTRAL_GAMEPLAN, ...(setup.gameplan ?? {}) };
     this.aiGameplan = deriveAiGameplan(this.seed);
-    this.teams = buildTeams(setup);
+    this.seasonGame = !!teamsOverride;
+    this.teams = teamsOverride ?? buildTeams(setup);
     this.flow = new GameFlow(this.teams, new RNG(this.seed ^ 0xabcdef), this.cfg);
     this.flow.setGameplan("home", this.gameplan);
     this.flow.setGameplan("away", this.aiGameplan);
@@ -289,6 +295,7 @@ export class GameController {
     this.live = false;
     this.phase = "setup";
     this.banner = null;
+    this.seasonGame = false;
     this.publish();
   }
 
@@ -968,6 +975,7 @@ export class GameController {
         home: teamRosterView(this.teams.home, this.gameplan),
         away: teamRosterView(this.teams.away, this.aiGameplan),
       },
+      seasonGame: this.seasonGame,
     });
   }
 }
