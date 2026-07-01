@@ -3,7 +3,9 @@ import {
   fourthDownDecision,
   pickDefense,
   pickOffense,
+  teamTendency,
   type Philosophy,
+  type Tendency,
 } from "./sim/coordinator";
 import { DEFAULT_CONFIG, GameFlow, type CommitOutcome, type GameConfig, type GameInfo, type PenaltyKind } from "./sim/game";
 import { PlaySim } from "./sim/engine";
@@ -111,6 +113,8 @@ export interface RenderFrame {
   losAbs: number;
   firstDownAbs: number;
   dir: 1 | -1;
+  /** True when the offense is inside the opponent's 20 (red-zone atmosphere). */
+  redZone: boolean;
   homeColor: string;
   awayColor: string;
   homeAbbr: string;
@@ -183,6 +187,7 @@ export class GameController {
   private league: League = "pro";
   private gameplan: Gameplan = { ...NEUTRAL_GAMEPLAN }; // user (home) plan
   private aiGameplan: Gameplan = { ...NEUTRAL_GAMEPLAN };
+  private tendencies!: Record<TeamId, Tendency>;
   private atHalftime = false;
   private seasonGame = false;
   private lastQuarter = 1;
@@ -230,6 +235,7 @@ export class GameController {
     // Build a default game so the setup screen has team names/colors to seed
     // its form, but stay in the setup phase until the user kicks off.
     this.teams = DEFAULT_TEAMS(this.seed);
+    this.tendencies = { home: teamTendency(this.teams.home), away: teamTendency(this.teams.away) };
     this.flow = new GameFlow(this.teams, new RNG(this.seed ^ 0xabcdef), cfg);
     this.stats = new StatsAggregator(this.teams);
     this.phase = "setup";
@@ -249,6 +255,7 @@ export class GameController {
     this.aiGameplan = deriveAiGameplan(this.seed);
     this.seasonGame = !!teamsOverride;
     this.teams = teamsOverride ?? buildTeams(setup);
+    this.tendencies = { home: teamTendency(this.teams.home), away: teamTendency(this.teams.away) };
     this.flow = new GameFlow(this.teams, new RNG(this.seed ^ 0xabcdef), this.cfg);
     this.flow.setGameplan("home", this.gameplan);
     this.flow.setGameplan("away", this.aiGameplan);
@@ -551,6 +558,7 @@ export class GameController {
       losAbs,
       firstDownAbs: this.flow.firstDownAbs(),
       dir,
+      redZone: this.flow.ballOn >= 80,
       homeColor: this.teams.home.color,
       awayColor: this.teams.away.color,
       homeAbbr: this.teams.home.abbr,
@@ -597,7 +605,8 @@ export class GameController {
       // User calls offense; AI (defense) is the opponent of the ball carrier —
       // it calls to its own game plan.
       this.callSide = "offense";
-      this.pendingHiddenCall = pickDefense(info, this.aiPhilosophy(), this.flow.rng, this.momentum[aiTeam], this.aiGameplan);
+      // Defense reads the ball-carrying (user) offense's roster tendency.
+      this.pendingHiddenCall = pickDefense(info, this.aiPhilosophy(), this.flow.rng, this.momentum[aiTeam], this.aiGameplan, this.tendencies[info.possession]);
       this.aiCallName = null;
       this.buildPreview(OFF_PLAYS[0].id, this.pendingHiddenCall);
     } else {
@@ -610,7 +619,7 @@ export class GameController {
         }
       }
       this.callSide = "defense";
-      this.pendingHiddenCall = pickOffense(info, this.aiPhilosophy(), this.flow.rng, this.momentum[info.possession], this.aiGameplan);
+      this.pendingHiddenCall = pickOffense(info, this.aiPhilosophy(), this.flow.rng, this.momentum[info.possession], this.aiGameplan, this.tendencies[info.possession]);
       this.aiCallName = null;
       this.buildPreview(this.pendingHiddenCall, DEF_PLAYS[0].id);
     }

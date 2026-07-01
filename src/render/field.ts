@@ -276,6 +276,21 @@ export function drawField(
       ctx.lineWidth = Math.max(1, scale * 0.28);
       ctx.strokeStyle = "rgba(255,255,255,0.85)";
       ctx.stroke();
+      // A small facing tick so ball-handlers/blockers show their heading too.
+      if (a.moving) {
+        const hd = Math.atan2(-a.vx, a.vy);
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(hd);
+        ctx.fillStyle = "rgba(255,255,255,0.92)";
+        ctx.beginPath();
+        ctx.moveTo(r * 1.02, 0);
+        ctx.lineTo(r * 0.52, r * 0.34);
+        ctx.lineTo(r * 0.52, -r * 0.34);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
     } else {
       const screenHeading = a.moving ? Math.atan2(-a.vx, a.vy) : -Math.PI / 2;
       drawChevron(ctx, cx, cy, r * 1.28, screenHeading);
@@ -347,6 +362,16 @@ export function drawField(
     ctx.fillRect(0, 0, w, h);
   }
   ctx.restore();
+
+  // Red-zone atmosphere: the sidelines glow warm when the offense threatens.
+  if (frame?.redZone) {
+    const pulse = 0.5 + 0.5 * Math.sin(time * 3);
+    const rz = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.34, w / 2, h / 2, Math.max(w, h) * 0.75);
+    rz.addColorStop(0, "rgba(0,0,0,0)");
+    rz.addColorStop(1, `rgba(220,40,30,${(0.14 + pulse * 0.08).toFixed(3)})`);
+    ctx.fillStyle = rz;
+    ctx.fillRect(0, 0, w, h);
+  }
 
   // Subtle edge vignette for a broadcast look.
   const vig = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.32, w / 2, h / 2, Math.max(w, h) * 0.74);
