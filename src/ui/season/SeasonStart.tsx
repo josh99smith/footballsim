@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useSeason } from "../../store/seasonStore";
 import { teamsForLeague } from "../../sim/teams";
+import { CoachPicker } from "../CoachPicker";
 import type { League } from "../../sim/rules";
 
 const LEAGUES: { id: League; label: string }[] = [
@@ -17,11 +18,12 @@ export function SeasonStart({ onCancel }: { onCancel: () => void }) {
 
   const [league, setLeague] = useState<League>("pro");
   const [teamKey, setTeamKey] = useState<string>(() => teamsForLeague("pro")[0].id);
+  const [coach, setCoach] = useState("field-general");
   const teams = teamsForLeague(league);
 
   const start = () => {
     const seed = (Math.floor(Date.now() % 2147483647) ^ 0x51ea) >>> 0;
-    newSeason(league, teamKey, seed);
+    newSeason(league, teamKey, seed, coach);
   };
 
   return (
@@ -66,6 +68,11 @@ export function SeasonStart({ onCancel }: { onCancel: () => void }) {
           8-team league · 7-week schedule · championship · players grow and decline
           each offseason.
         </p>
+      </div>
+
+      <div className="setup-section">
+        <label className="setup-label">Head coach</label>
+        <CoachPicker value={coach} onChange={setCoach} />
       </div>
 
       <div className="season-start-actions">

@@ -68,6 +68,8 @@ export interface SeasonState {
   phase: SeasonPhase;
   /** The user's standing game plan (adjustable before each game). */
   userGameplan: Gameplan;
+  /** Head-coach archetype id for the franchise. */
+  userCoach: string;
   /** Last offseason's report, shown on the offseason screen. */
   lastReport: ProgressEntry[];
   /** Champion team key once the season completes (null mid-season). */

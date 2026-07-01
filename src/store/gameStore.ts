@@ -56,6 +56,10 @@ function initial(): UIState {
       away: { name: "", abbr: "", color: "#d94a3d", offense: [], defense: [], ovr: 0 },
     },
     seasonGame: false,
+    coach: {
+      userName: "", userTrait: "", userTraitDesc: "", userTraitHot: false,
+      aiName: "", aiTrait: "",
+    },
   };
 }
 

@@ -3,14 +3,6 @@ import { useGame } from "../store/gameStore";
 import { useUI } from "../store/uiStore";
 import { DEF_PLAYS, OFF_PLAYS, type DefPlay, type OffPlay } from "../sim/playbook";
 import { PlayArt } from "./PlayArt";
-import type { Philosophy } from "../sim/coordinator";
-
-const SLIDERS: { key: keyof Philosophy; label: string; lo: string; hi: string }[] = [
-  { key: "passLean", label: "Run / Pass", lo: "Run", hi: "Pass" },
-  { key: "aggression", label: "Aggression", lo: "Safe", hi: "Bold" },
-  { key: "risk", label: "Risk", lo: "Low", hi: "High" },
-  { key: "blitzFreq", label: "Blitz", lo: "Sit", hi: "Heat" },
-];
 
 /** Formations in a sensible display order; unknown ones fall to the end. */
 const FORMATION_ORDER = ["Shotgun", "Singleback", "I-Form", "4-3", "Nickel", "Bear", "Goal Line"];
@@ -31,7 +23,6 @@ export function PlaySheet() {
   const clockPlay = useGame((g) => g.clockPlay);
   const timeout = useGame((g) => g.timeout);
   const convert = useGame((g) => g.convert);
-  const setPhilosophy = useGame((g) => g.setPhilosophy);
   const flip = useUI((u) => u.playFlip);
   const togglePlayFlip = useUI((u) => u.togglePlayFlip);
   const setPlayFlip = useUI((u) => u.setPlayFlip);
@@ -111,6 +102,17 @@ export function PlaySheet() {
         ))}
       </div>
 
+      <div className={`coach-strip ${s.coach.userTraitHot ? "hot" : ""}`}>
+        <div className="cs-line">
+          <span className="cs-you">{s.coach.userName}</span>
+          <span className="cs-vs">vs</span>
+          <span className="cs-opp">{s.coach.aiName}</span>
+          <span className={`cs-badge ${s.coach.userTraitHot ? "hot" : ""}`}>
+            ★ {s.coach.userTrait}{s.coach.userTraitHot ? " · ACTIVE" : ""}
+          </span>
+        </div>
+      </div>
+
       <div className="sheet-scroll">
         <div className="pcard-grid">
           {shown.map((p) => (
@@ -149,22 +151,6 @@ export function PlaySheet() {
           )}
         </div>
 
-        <details className="philosophy">
-          <summary>Coaching Philosophy</summary>
-          <p className="phil-note">Drives the AI on the side you're not calling.</p>
-          <div className="phil-grid">
-            {SLIDERS.map((sl) => (
-              <label key={sl.key} className="slider-row">
-                <span className="slider-label">{sl.label}</span>
-                <input
-                  type="range" min={0} max={100}
-                  value={Math.round(s.philosophy[sl.key] * 100)}
-                  onChange={(e) => setPhilosophy({ [sl.key]: Number(e.target.value) / 100 } as Partial<Philosophy>)}
-                />
-              </label>
-            ))}
-          </div>
-        </details>
       </div>
     </div>
   );

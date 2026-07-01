@@ -65,7 +65,9 @@ function roundRobin(n: number, rng: RNG): Matchup[][] {
 }
 
 /** Create a fresh season: pick a slate of teams, generate rosters + schedule. */
-export function createSeason(league: League, userTeamKey: string, seed: number): SeasonState {
+export function createSeason(
+  league: League, userTeamKey: string, seed: number, coach = "field-general",
+): SeasonState {
   const rng = new RNG((seed ^ 0x5ea50) >>> 0);
   const library = teamsForLeague(league);
   const userLib = library.find((t) => t.id === userTeamKey) ?? library[0];
@@ -92,7 +94,7 @@ export function createSeason(league: League, userTeamKey: string, seed: number):
   return {
     league, seed: seed >>> 0, year: 1, week: 0, userTeam, teams,
     schedule, results: schedule.map(() => []), phase: "regular",
-    userGameplan: { ...NEUTRAL_GAMEPLAN }, lastReport: [], championKey: null,
+    userGameplan: { ...NEUTRAL_GAMEPLAN }, userCoach: coach, lastReport: [], championKey: null,
   };
 }
 

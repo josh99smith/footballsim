@@ -2,6 +2,9 @@ import { FIELD } from "./constants";
 import { PlaySim, type PlaySetup } from "./engine";
 import { getDefPlay, getOffPlay, mirrorOffPlay } from "./playbook";
 import { applyGameplan, NEUTRAL_GAMEPLAN, type Gameplan } from "./gameplan";
+import {
+  addBonus, DEFAULT_COACH, traitActive, traitBonus, type Coach, type CoachCtx,
+} from "./coach";
 import { rulesFor, type League, type Rules } from "./rules";
 import { RNG } from "./rng";
 import type { Team } from "./roster";
@@ -78,6 +81,8 @@ export class GameFlow {
   top = { home: 0, away: 0 };
   /** Per-team game plans (rating emphasis). */
   gameplans: Record<TeamId, Gameplan> = { home: { ...NEUTRAL_GAMEPLAN }, away: { ...NEUTRAL_GAMEPLAN } };
+  /** Per-team head coaches (identity, philosophy, signature trait). */
+  coaches: Record<TeamId, Coach> = { home: DEFAULT_COACH, away: DEFAULT_COACH };
   timeouts = { home: 3, away: 3 };
   pendingConversion: TeamId | null = null;
   /** Set when a timeout/spike should stop the clock on the next play. */
@@ -146,11 +151,19 @@ export class GameFlow {
     const offPlan = this.gameplans[this.possession];
     const defPlan = this.gameplans[other(this.possession)];
     const offPlay = flip ? mirrorOffPlay(getOffPlay(offPlayId)) : getOffPlay(offPlayId);
+    // Coach signature traits: a situational rating bump on top of the gameplan.
+    const off = this.possession, def = other(this.possession);
+    const offBonus = traitBonus(this.coaches[off], true, this.coachCtx(off));
+    const defBonus = traitBonus(this.coaches[def], false, this.coachCtx(def));
     const setup: PlaySetup = {
       offPlay,
       defPlay: getDefPlay(defPlayId),
-      offRoster: offTeam.offense.map((pl) => ({ ...pl, ratings: applyGameplan(pl.ratings, pl.pos, offPlan) })),
-      defRoster: defTeam.defense.map((pl) => ({ ...pl, ratings: applyGameplan(pl.ratings, pl.pos, defPlan) })),
+      offRoster: offTeam.offense.map((pl) => ({
+        ...pl, ratings: addBonus(applyGameplan(pl.ratings, pl.pos, offPlan), offBonus[pl.pos]),
+      })),
+      defRoster: defTeam.defense.map((pl) => ({
+        ...pl, ratings: addBonus(applyGameplan(pl.ratings, pl.pos, defPlan), defBonus[pl.pos]),
+      })),
       ballY: FIELD.WIDTH / 2,
       yardsToGoal: 100 - this.ballOn,
       defPress: defPlan.press,
@@ -171,6 +184,29 @@ export class GameFlow {
     if (endOfHalf && this.clock <= 120 && lead <= 0) return "hurry";
     if (this.quarter >= 4 && this.clock <= 300 && lead > 0) return "kill";
     return "normal";
+  }
+
+  /** Assign both head coaches. */
+  setCoaches(coaches: Record<TeamId, Coach>): void {
+    this.coaches = coaches;
+  }
+
+  /** Situation from a team's perspective, for its coach's trait condition. */
+  private coachCtx(team: TeamId): CoachCtx {
+    return {
+      quarter: this.quarter,
+      clock: this.clock,
+      scoreDiff: this.score[team] - this.score[other(team)],
+      down: this.down,
+      distance: this.distance,
+      ballOn: this.ballOn,
+      overtime: this.overtime,
+    };
+  }
+
+  /** Is a team's coach signature trait live right now? (For the UI badge.) */
+  traitActiveFor(team: TeamId): boolean {
+    return traitActive(this.coaches[team], this.possession === team, this.coachCtx(team));
   }
 
   /** Set a team's game plan (offense axes apply when it has the ball, defense

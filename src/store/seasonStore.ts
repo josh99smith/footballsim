@@ -21,7 +21,7 @@ interface SeasonStore {
   pendingUserIsHome: boolean;
   pendingChampionship: boolean;
 
-  newSeason: (league: League, userTeamKey: string, seed: number) => void;
+  newSeason: (league: League, userTeamKey: string, seed: number, coach?: string) => void;
   openHub: () => void;
   leaveToMenu: () => void;
   abandon: () => void;
@@ -54,6 +54,7 @@ function launchGame(s: SeasonState, userIdx: number, oppIdx: number, seedSalt: n
     home: { name: user.name, abbr: user.abbr, color: user.color, strength: user.strength },
     away: { name: opp.name, abbr: opp.abbr, color: opp.color, strength: opp.strength },
     gameplan: s.userGameplan,
+    coach: s.userCoach,
   };
   // User always coaches the home side; opponent roster on away.
   controller.startGame(setup, { home: user.roster, away: opp.roster });
@@ -66,8 +67,8 @@ export const useSeason = create<SeasonStore>((set, get) => ({
   pendingUserIsHome: true,
   pendingChampionship: false,
 
-  newSeason: (league, userTeamKey, seed) => {
-    const s = persist(createSeason(league, userTeamKey, seed));
+  newSeason: (league, userTeamKey, seed, coach) => {
+    const s = persist(createSeason(league, userTeamKey, seed, coach));
     set({ season: s, view: "hub", playing: false });
   },
 

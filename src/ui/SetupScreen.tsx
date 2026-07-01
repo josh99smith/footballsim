@@ -3,6 +3,8 @@ import { controller, useGame } from "../store/gameStore";
 import { buildTeams, type Difficulty, type GameSetup } from "../controller";
 import { getRecents, loadGame } from "../store/persistence";
 import { GameplanControls } from "./GameplanControls";
+import { CoachPicker } from "./CoachPicker";
+import { coachById } from "../sim/coach";
 import { NEUTRAL_GAMEPLAN, deriveAiGameplan } from "../sim/gameplan";
 import { teamRosterView } from "../sim/ratingsView";
 import { useUI } from "../store/uiStore";
@@ -202,6 +204,14 @@ export function SetupScreen() {
             </button>
           </div>
           <p className="setup-hint">Same seed + same play calls reproduces the exact game.</p>
+        </div>
+
+        <div className="setup-section">
+          <label className="setup-label">Head coach</label>
+          <CoachPicker
+            value={setup.coach ?? "field-general"}
+            onChange={(id) => patch({ coach: id, gameplan: coachById(id).gameplan })}
+          />
         </div>
 
         <div className="setup-section">

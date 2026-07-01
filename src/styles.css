@@ -222,20 +222,34 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .conv-title { font-weight: 700; font-size: 15px; }
 .conv-sub { font-size: 11px; color: var(--muted); }
 
-/* philosophy (collapsible) */
-.philosophy { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
-.philosophy > summary {
-  cursor: pointer; font-size: 13px; font-weight: 600; list-style: none;
-  display: flex; align-items: center; gap: 6px; min-height: 30px;
+/* coach picker (setup / season) */
+.coach-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (min-width: 460px) { .coach-grid { grid-template-columns: 1fr 1fr 1fr; } }
+.coach-card {
+  display: flex; flex-direction: column; gap: 3px; text-align: left; cursor: pointer;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 9px 10px; color: var(--text); transition: border-color 0.14s, transform 0.06s, background 0.14s;
 }
-.philosophy > summary::-webkit-details-marker { display: none; }
-.philosophy > summary::before { content: "▸"; color: var(--muted); font-size: 11px; }
-.philosophy[open] > summary::before { content: "▾"; }
-.phil-note { margin: 6px 0 10px; font-size: 11px; color: var(--muted); }
-.phil-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
-.slider-row { display: flex; flex-direction: column; gap: 2px; }
-.slider-label { font-size: 11px; color: var(--muted); }
-.slider-row input[type="range"] { width: 100%; height: 26px; accent-color: var(--accent); }
+.coach-card:active { transform: scale(0.98); }
+.coach-card.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--panel-2)); box-shadow: 0 0 14px -5px var(--accent); }
+.coach-name { font-weight: 800; font-size: 14px; }
+.coach-blurb { font-size: 10.5px; color: var(--muted); line-height: 1.25; }
+.coach-plan { font-size: 10px; font-weight: 700; color: var(--accent-2); text-transform: uppercase; letter-spacing: 0.3px; }
+.coach-trait { font-size: 10px; color: var(--muted); line-height: 1.3; margin-top: 2px; }
+.coach-trait b { color: #ffd76b; font-weight: 700; }
+
+/* in-game coach strip (play sheet) */
+.coach-strip { margin: 0 0 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.cs-line { display: flex; align-items: center; gap: 7px; font-size: 12.5px; flex-wrap: wrap; }
+.cs-you { font-weight: 800; }
+.cs-vs { font-size: 10px; color: var(--muted); text-transform: uppercase; }
+.cs-opp { color: var(--muted); }
+.cs-badge {
+  margin-left: auto; font-size: 10.5px; font-weight: 800; padding: 2px 9px; border-radius: 999px;
+  background: var(--panel-2); border: 1px solid var(--border); color: #ffd76b; white-space: nowrap;
+}
+.cs-badge.hot { background: #b45309; border-color: #f59e0b; color: #fff; animation: cs-pulse 1.3s ease-in-out infinite; }
+@keyframes cs-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.5); } 50% { box-shadow: 0 0 10px 2px rgba(245,158,11,0.6); } }
 
 /* ---- broadcast banner ---- */
 .banner {

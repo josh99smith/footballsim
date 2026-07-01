@@ -12,7 +12,8 @@ import { PlaySim } from "./sim/engine";
 import { RNG } from "./sim/rng";
 import { DEFAULT_TEAMS, generateTeam, hashStr, type Team } from "./sim/roster";
 import { DEF_PLAYS, OFF_PLAYS } from "./sim/playbook";
-import { NEUTRAL_GAMEPLAN, deriveAiGameplan, type Gameplan } from "./sim/gameplan";
+import { NEUTRAL_GAMEPLAN, type Gameplan } from "./sim/gameplan";
+import { coachById, deriveAiCoach, type Coach } from "./sim/coach";
 import { teamRosterView, type RostersView } from "./sim/ratingsView";
 import type { League } from "./sim/rules";
 import { StatsAggregator } from "./stats/aggregator";
@@ -39,6 +40,8 @@ export interface GameSetup {
   away: { name: string; abbr: string; color: string; strength?: number };
   /** Optional so older saves / share codes still load (defaults to neutral). */
   gameplan?: Gameplan;
+  /** Head-coach archetype id for the user's team (defaults to Field General). */
+  coach?: string;
 }
 
 /** A recorded user action. Replaying these from the setup reconstructs the
@@ -169,6 +172,15 @@ export interface UIState {
   rosters: RostersView;
   /** True when this game is being played inside Season mode. */
   seasonGame: boolean;
+  /** Head-coach identities + the user's live signature-trait status. */
+  coach: {
+    userName: string;
+    userTrait: string;
+    userTraitDesc: string;
+    userTraitHot: boolean; // signature is firing in the current situation
+    aiName: string;
+    aiTrait: string;
+  };
 }
 
 type Emit = (s: UIState) => void;
@@ -182,6 +194,8 @@ export class GameController {
   private phase: Phase = "setup";
   private speed: Speed = "1";
   private philosophy: Philosophy = { ...DEFAULT_PHILOSOPHY };
+  private userCoach: Coach = coachById(undefined);
+  private aiCoach: Coach = deriveAiCoach(0);
   private userTeam: TeamId = "home";
   private seed: number;
   private cfg: GameConfig;
@@ -253,14 +267,23 @@ export class GameController {
     this.league = setup.league ?? "pro";
     this.cfg = { quarterSeconds: setup.quarterSeconds, league: this.league };
     this.difficulty = setup.difficulty;
-    this.gameplan = { ...NEUTRAL_GAMEPLAN, ...(setup.gameplan ?? {}) };
-    this.aiGameplan = deriveAiGameplan(this.seed);
+    // Head coaches: the user picks one; the opponent's is seed-derived. Each
+    // team's gameplan and playcalling flow from its coach.
+    this.userCoach = coachById(setup.coach);
+    this.aiCoach = deriveAiCoach(this.seed);
+    this.philosophy = { ...this.userCoach.philosophy };
+    this.gameplan = setup.gameplan
+      ? { ...NEUTRAL_GAMEPLAN, ...setup.gameplan }
+      : { ...this.userCoach.gameplan };
+    this.aiGameplan = { ...this.aiCoach.gameplan };
     this.seasonGame = !!teamsOverride;
     this.teams = teamsOverride ?? buildTeams(setup);
     this.tendencies = { home: teamTendency(this.teams.home), away: teamTendency(this.teams.away) };
     this.flow = new GameFlow(this.teams, new RNG(this.seed ^ 0xabcdef), this.cfg);
-    this.flow.setGameplan("home", this.gameplan);
-    this.flow.setGameplan("away", this.aiGameplan);
+    const aiTeam: TeamId = this.userTeam === "home" ? "away" : "home";
+    this.flow.setGameplan(this.userTeam, this.gameplan);
+    this.flow.setGameplan(aiTeam, this.aiGameplan);
+    this.flow.setCoaches({ [this.userTeam]: this.userCoach, [aiTeam]: this.aiCoach } as Record<TeamId, Coach>);
     this.stats = new StatsAggregator(this.teams);
     this.sim = null;
     this.live = false;
@@ -318,6 +341,7 @@ export class GameController {
       home: { name: this.teams.home.name, abbr: this.teams.home.abbr, color: this.teams.home.color },
       away: { name: this.teams.away.name, abbr: this.teams.away.abbr, color: this.teams.away.color },
       gameplan: { ...this.gameplan },
+      coach: this.userCoach.id,
     };
   }
 
@@ -628,9 +652,9 @@ export class GameController {
     this.publish();
   }
 
-  /** AI plays as the opponent of the user team. */
+  /** AI plays as the opponent of the user team, to ITS OWN coach's philosophy. */
   private aiPhilosophy(): Philosophy {
-    return this.philosophy;
+    return this.aiCoach.philosophy;
   }
 
   private buildPreview(offId: string, defId: string): void {
@@ -987,6 +1011,14 @@ export class GameController {
         away: teamRosterView(this.teams.away, this.aiGameplan),
       },
       seasonGame: this.seasonGame,
+      coach: {
+        userName: this.userCoach.name,
+        userTrait: this.userCoach.trait.name,
+        userTraitDesc: this.userCoach.trait.desc,
+        userTraitHot: this.phase !== "setup" && this.flow.traitActiveFor(this.userTeam),
+        aiName: this.aiCoach.name,
+        aiTrait: this.aiCoach.trait.name,
+      },
     });
   }
 }
