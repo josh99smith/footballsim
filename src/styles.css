@@ -194,7 +194,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 .pcard:active { transform: scale(0.98); border-color: var(--accent); }
 .pcard-art { position: relative; background: #0d2416; border-bottom: 1px solid var(--border); }
-.play-art { display: block; width: 100%; aspect-ratio: 1 / 1; }
+.play-art { display: block; width: 100%; aspect-ratio: 124 / 96; }
 .pcard-type {
   position: absolute; top: 5px; right: 5px; font-size: 8.5px; font-weight: 800; letter-spacing: 0.5px;
   text-transform: uppercase; padding: 1px 5px; border-radius: 4px;

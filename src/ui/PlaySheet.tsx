@@ -49,8 +49,6 @@ export function PlaySheet() {
   const activePage = formations.includes(page) || page === "All" ? page : "All";
   const shown = activePage === "All" ? plays : plays.filter((p) => p.formation === activePage);
 
-  const teamColor = s.userTeam === "home" ? s.homeColor : s.awayColor;
-
   if (s.awaitingConversion) {
     return (
       <div className="sheet">
@@ -122,7 +120,6 @@ export function PlaySheet() {
                   play={p}
                   side={callingOffense ? "offense" : "defense"}
                   flip={callingOffense && flip}
-                  color={teamColor}
                 />
                 <span className="pcard-type">{p.type}</span>
               </div>
