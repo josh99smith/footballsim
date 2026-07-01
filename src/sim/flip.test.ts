@@ -7,13 +7,14 @@ describe("mirrorOffPlay", () => {
     const p = getOffPlay("power-sweep");
     const m = mirrorOffPlay(p);
     p.roles.forEach((r, i) => {
+      const ma = m.roles[i].assign;
       expect(m.roles[i].dy).toBe(-r.dy);
-      if (r.assign.kind === "carry" && m.roles[i].assign.kind === "carry") {
-        expect(m.roles[i].assign.aimGap).toBe(-r.assign.aimGap);
+      if (r.assign.kind === "carry" && ma.kind === "carry") {
+        expect(ma.aimGap).toBe(-r.assign.aimGap);
       }
-      if (r.assign.kind === "runRoute" && m.roles[i].assign.kind === "runRoute") {
+      if (r.assign.kind === "runRoute" && ma.kind === "runRoute") {
         r.assign.waypoints.forEach((w, j) => {
-          expect(m.roles[i].assign.waypoints[j]).toEqual({ x: w.x, y: -w.y });
+          expect(ma.waypoints[j]).toEqual({ x: w.x, y: -w.y });
         });
       }
     });
