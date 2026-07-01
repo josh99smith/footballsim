@@ -51,6 +51,10 @@ function initial(): UIState {
     atHalftime: false,
     gameplan: { ...NEUTRAL_GAMEPLAN },
     aiGameplan: { ...NEUTRAL_GAMEPLAN },
+    rosters: {
+      home: { name: "", abbr: "", color: "#2e6fdb", offense: [], defense: [], ovr: 0 },
+      away: { name: "", abbr: "", color: "#d94a3d", offense: [], defense: [], ovr: 0 },
+    },
   };
 }
 

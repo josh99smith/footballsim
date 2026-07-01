@@ -21,6 +21,7 @@ export function BottomDock() {
   const phase = useGame((s) => s.phase);
   const shareCode = useGame((s) => s.shareCode);
   const toggleStats = useUI((s) => s.toggleStats);
+  const toggleRatings = useUI((s) => s.toggleRatings);
   const [muted, setMuted] = useState(sound.muted);
   const [shared, setShared] = useState(false);
 
@@ -63,6 +64,7 @@ export function BottomDock() {
         </div>
         <div className="dock-tools">
           <button onClick={toggleStats} aria-label="Stats" title="Stats">📊</button>
+          <button onClick={toggleRatings} aria-label="Rosters and ratings" title="Rosters &amp; ratings">👥</button>
           <button onClick={toggleMute} aria-label={muted ? "Unmute" : "Mute"} title={muted ? "Unmute" : "Mute"}>
             {muted ? "🔇" : "🔊"}
           </button>
