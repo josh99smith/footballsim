@@ -35,10 +35,10 @@ function playScripted(seed: number): { home: number; away: number; plays: number
 // Baselines reflect the AI opponent's seed-derived game plan (which nudges its
 // ratings). Regenerate deliberately when the sim changes intentionally.
 const GOLDEN: Record<number, { home: number; away: number; plays: number }> = {
-  1: { home: 0, away: 13, plays: 27 },
+  1: { home: 0, away: 23, plays: 31 },
   7: { home: 13, away: 8, plays: 32 },
-  42: { home: 0, away: 14, plays: 23 },
-  123: { home: 0, away: 7, plays: 26 },
+  42: { home: 0, away: 28, plays: 25 },
+  123: { home: 0, away: 13, plays: 23 },
 };
 
 describe("golden determinism", () => {

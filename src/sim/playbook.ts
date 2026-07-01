@@ -153,13 +153,14 @@ export const OFF_PLAYS: OffPlay[] = [
         want: "WR",
         dx: -0.3,
         dy: -17,
-        assign: { kind: "runRoute", waypoints: [{ x: 22, y: 1 }, { x: 38, y: 1 }] },
+        // Outside go, stemming to the boundary — a back-shoulder sideline shot.
+        assign: { kind: "runRoute", waypoints: [{ x: 20, y: -5 }, { x: 38, y: -8 }] },
       },
       {
         want: "WR",
         dx: -0.3,
         dy: 17,
-        assign: { kind: "runRoute", waypoints: [{ x: 22, y: -1 }, { x: 38, y: -1 }] },
+        assign: { kind: "runRoute", waypoints: [{ x: 20, y: 5 }, { x: 38, y: 8 }] },
       },
       {
         want: "WR",
@@ -194,13 +195,15 @@ export const OFF_PLAYS: OffPlay[] = [
         want: "WR",
         dx: -0.3,
         dy: -17,
-        assign: { kind: "runRoute", waypoints: [{ x: 14, y: 0 }, { x: 30, y: 2 }, { x: 46, y: 2 }] },
+        // Deep go stemming to the left boundary — the primary shot.
+        assign: { kind: "runRoute", waypoints: [{ x: 16, y: -4 }, { x: 32, y: -7 }, { x: 46, y: -8 }] },
       },
       {
         want: "WR",
         dx: -0.3,
         dy: 17,
-        assign: { kind: "runRoute", waypoints: [{ x: 12, y: 0 }, { x: 16, y: -6 }] }, // comeback
+        // Deep comeback to the right sideline.
+        assign: { kind: "runRoute", waypoints: [{ x: 16, y: 0 }, { x: 20, y: 7 }] },
       },
       {
         want: "WR",

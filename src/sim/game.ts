@@ -153,9 +153,23 @@ export class GameFlow {
       ballY: FIELD.WIDTH / 2,
       yardsToGoal: 100 - this.ballOn,
       defPress: defPlan.press,
+      clockIntent: this.clockIntent(),
       rng: this.rng,
     };
     return new PlaySim(setup);
+  }
+
+  /** How the ball-carrier should treat the clock this snap: a trailing team in
+   *  the two-minute drill hunts the sideline; a team protecting a late lead
+   *  stays inbounds to bleed the clock. */
+  private clockIntent(): "normal" | "hurry" | "kill" {
+    if (this.overtime > 0) return "normal";
+    const off = this.possession;
+    const lead = this.score[off] - this.score[other(off)];
+    const endOfHalf = this.quarter === 2 || this.quarter >= 4;
+    if (endOfHalf && this.clock <= 120 && lead <= 0) return "hurry";
+    if (this.quarter >= 4 && this.clock <= 300 && lead > 0) return "kill";
+    return "normal";
   }
 
   /** Set a team's game plan (offense axes apply when it has the ball, defense
@@ -556,11 +570,13 @@ export class GameFlow {
   private describePlay(r: PlayResult): string {
     const off = this.teams[this.possession].abbr;
     if (r.endReason === "sack") return `SACKED for a loss of ${Math.abs(Math.round(r.yards))}.`;
+    const oob = r.endReason === "outOfBounds";
+    const tail = oob ? ` — out of bounds, clock stops.` : `.`;
     if (r.isPass) {
       if (r.passResult === "incomplete") return `Pass incomplete.`;
-      return `${off} pass complete for ${Math.round(r.yards)} yards.`;
+      return `${off} pass complete for ${Math.round(r.yards)} yards${tail}`;
     }
-    return `${off} run for ${Math.round(r.yards)} yards.`;
+    return `${off} run for ${Math.round(r.yards)} yards${tail}`;
   }
 
   /** Human-readable field position, e.g. "OWN 32" / "OPP 8". */

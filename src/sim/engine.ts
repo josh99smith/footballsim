@@ -33,6 +33,10 @@ export interface PlaySetup {
   /** Defensive press emphasis (0..1). Tighter early man coverage (a jam) at
    *  the cost of deep vulnerability (which the lowered CB awareness supplies). */
   defPress?: number;
+  /** Ball-carrier clock intent: "hurry" heads for the sideline to stop the
+   *  clock, "kill" stays inbounds to keep it running, "normal" fights to stay
+   *  in but doesn't chase the boundary. */
+  clockIntent?: "normal" | "hurry" | "kill";
   rng: RNG;
 }
 
@@ -334,6 +338,7 @@ export class PlaySim {
       const away = a.pos.y - nd.pos.y;
       lateral = Math.sign(away || 1) * (seeThreat - d) * juke;
     }
+    lateral += this.sidelineBias(a, !!nd && d < seeThreat);
     let target: Vec2;
     let burst = 1;
     if (a.pos.x < 0.5) {
@@ -347,6 +352,30 @@ export class PlaySim {
       target = v(a.pos.x + 10, clamp(a.pos.y + lateral, 2, FIELD.WIDTH - 2));
     }
     steer(a, target, burst);
+  }
+
+  /** Lateral nudge that reflects the carrier's relationship with the sideline:
+   *  fight to stay in bounds by default, hug the middle to bleed the clock, or
+   *  bail toward the nearest boundary to stop the clock when pressured. */
+  private sidelineBias(a: Agent, pressured: boolean): number {
+    const W = FIELD.WIDTH;
+    const near = Math.min(a.pos.y, W - a.pos.y); // yards to nearest sideline
+    const toCenter = a.pos.y < W / 2 ? 1 : -1; // sign that steers inbounds
+    const intent = this.setup.clockIntent ?? "normal";
+    if (intent === "hurry" && a.pos.x > 2 && near < 9) {
+      // The clock must stop — angle to the nearest boundary and get out, harder
+      // the moment a defender closes.
+      return -toCenter * (pressured ? 2.6 : 1.3);
+    }
+    if (intent === "kill") {
+      // Protecting a lead: stay well inbounds so the clock keeps running.
+      return toCenter * (10 - Math.min(10, near)) * 0.5;
+    }
+    // Normal: a light "feel" only when truly hugging the chalk, so a receiver
+    // who caught it near the sideline can keep working up the boundary (and get
+    // forced out by pursuit) rather than veering back into the field.
+    if (near < 2.2) return toCenter * (2.2 - near) * 0.4;
+    return 0;
   }
 
   private byCarryAssign(a: Agent): { aimGap: number } | null {
@@ -532,7 +561,9 @@ export class PlaySim {
     const errScale = (0.35 + flight / 55) * (1.2 - qb.ratings.awareness / 140);
     const err = v(this.rng.gaussian() * errScale, this.rng.gaussian() * errScale);
     const land = add(lead, err);
-    land.y = clamp(land.y, 0.5, FIELD.WIDTH - 0.5);
+    // Allow the ball to sail just past the sideline: an errant out-breaking
+    // throw lands out of bounds (a safe incompletion), not a pick.
+    land.y = clamp(land.y, -1.5, FIELD.WIDTH + 1.5);
     this.airYards = land.x; // local x == yards downfield from LOS
     hang = Math.max(0.3, dist(qb.pos, land) / throwSpeed);
     this.ball.inAir = true;
@@ -688,6 +719,14 @@ export class PlaySim {
       // Take a pursuit angle: aim ahead of the carrier to cut him off rather
       // than chase from behind (a trailing defender never catches a fast back).
       const lead = add(carrier.pos, scale(carrier.vel, 0.5));
+      // Sideline leverage: when the carrier is near a boundary, attack his
+      // INSIDE shoulder so the sideline works as a 12th defender.
+      const W = FIELD.WIDTH;
+      const near = Math.min(carrier.pos.y, W - carrier.pos.y);
+      if (near < 13) {
+        const inside = carrier.pos.y < W / 2 ? 1 : -1; // toward midfield
+        lead.y += inside * (13 - near) * 0.16;
+      }
       steer(a, lead, 1);
       return;
     }
@@ -761,6 +800,25 @@ export class PlaySim {
       return;
     }
 
+    // Sideline awareness: a ball at the boundary demands getting a foot down.
+    // Sharp, agile receivers toe-tap; anyone else (or a ball past the chalk) is
+    // ruled out of bounds — incomplete, but no interception risk out there.
+    const sideMargin = Math.min(land.y, FIELD.WIDTH - land.y);
+    if (sideMargin < 1.6) {
+      const feet = clamp(0.32 + (target.ratings.awareness + target.ratings.agility - 150) / 130, 0.05, 0.9);
+      if (sideMargin < 0 || !this.rng.chance(feet)) {
+        this.emit({ t: "incomplete", intendedFor: target.id });
+        this.finish("incomplete", {
+          yards: 0,
+          passerId: this.passerId ?? this.qbId,
+          targetId: target.id,
+          isPass: true,
+          passResult: "incomplete",
+        });
+        return;
+      }
+    }
+
     // Completion odds: accuracy of placement + hands, minus tight coverage.
     // Hands matter more now, and a contest is only as tough as the defender:
     // a stud cover man in your face is a near-lock incompletion, a scrub isn't.
@@ -826,8 +884,12 @@ export class PlaySim {
       });
       return;
     }
-    // Out of bounds.
-    if (carrier.pos.y <= 0.6 || carrier.pos.y >= FIELD.WIDTH - 0.6) {
+    // Stepped out of bounds: reached the chalk, or is skirting the boundary
+    // with outward momentum (about to cross).
+    const W = FIELD.WIDTH;
+    const nearL = carrier.pos.y <= 1.1, nearR = carrier.pos.y >= W - 1.1;
+    const drifting = (nearL && carrier.vel.y < -0.4) || (nearR && carrier.vel.y > 0.4);
+    if (carrier.pos.y <= 0.6 || carrier.pos.y >= W - 0.6 || drifting) {
       this.emit({ t: "outOfBounds", carrier: carrier.id });
       this.finish("outOfBounds", { yards: carrier.pos.x, carrierId: carrier.id });
       return;
@@ -852,7 +914,20 @@ export class PlaySim {
         this.emit({ t: "breakTackle", carrier: carrier.id, by: def.id });
         continue;
       }
-      const reason = carrier.id === this.qbId && !this.handoffDone ? "sack" : "tackle";
+      const isSack = carrier.id === this.qbId && !this.handoffDone;
+      // A tackle near the sideline where the defender has inside leverage (or the
+      // carrier's own momentum is outward) forces him out — the clock stops.
+      const nearSideline = carrier.pos.y < 4 || carrier.pos.y > W - 4;
+      const towardCenter = carrier.pos.y < W / 2 ? 1 : -1;
+      const defInside = (def.pos.y - carrier.pos.y) * towardCenter > -0.5;
+      const forcedOut = !isSack && nearSideline &&
+        (defInside || (carrier.pos.y < W / 2 ? carrier.vel.y < 0 : carrier.vel.y > 0));
+      if (forcedOut) {
+        this.emit({ t: "outOfBounds", carrier: carrier.id });
+        this.finish("outOfBounds", { yards: carrier.pos.x, carrierId: carrier.id, tacklerId: def.id });
+        return;
+      }
+      const reason = isSack ? "sack" : "tackle";
       this.emit({ t: "tackle", by: def.id, carrier: carrier.id, yardLine: carrier.pos.x });
       this.finish(reason, {
         yards: carrier.pos.x,
