@@ -61,6 +61,15 @@ button, input[type="range"] {
   padding: calc(6px + env(safe-area-inset-top)) 12px 8px;
   background: linear-gradient(var(--glass), rgba(13,17,23,0.45) 70%, transparent);
   backdrop-filter: blur(2px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset;
+}
+.tb-pts { transition: transform 0.1s ease; }
+.tb-pts.bump { animation: pts-pop 0.6s cubic-bezier(0.2,1.5,0.4,1); }
+@keyframes pts-pop {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.5); color: var(--accent-2); text-shadow: 0 0 14px rgba(255,210,30,0.8); }
+  100% { transform: scale(1); }
 }
 .tb-team { display: flex; align-items: center; gap: 6px; font-weight: 700; min-width: 0; }
 .tb-team.away { justify-content: flex-end; }
@@ -305,12 +314,16 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   display: flex; align-items: center; justify-content: center;
   background: rgba(7,9,13,0.78); backdrop-filter: blur(3px);
   padding: 14px;
+  animation: overlay-fade 0.2s ease both;
 }
+@keyframes overlay-fade { from { opacity: 0; } to { opacity: 1; } }
 .overlay-card {
   width: 100%; max-width: 460px; max-height: 92%;
   display: flex; flex-direction: column;
-  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
   overflow: hidden;
+  box-shadow: 0 24px 60px -20px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.06);
+  animation: card-rise 0.26s cubic-bezier(0.2,0.9,0.3,1) both;
 }
 .overlay-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border); }
 .overlay-head h2 { margin: 0; font-size: 17px; }
@@ -320,9 +333,26 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .final-line { font-size: 16px; margin: 4px 0 2px; }
 .final-score { font-size: 28px; font-weight: 800; margin: 0 0 12px; }
 .gameover-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
-.ghost-btn { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 8px; cursor: pointer; }
-button.primary { background: var(--accent); border: none; color: #fff; padding: 12px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; }
-button.primary.big { width: 100%; font-size: 15px; min-height: 48px; }
+.ghost-btn { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 8px; cursor: pointer; transition: border-color 0.14s, background 0.14s, transform 0.06s; }
+.ghost-btn:hover { border-color: var(--accent); }
+.ghost-btn:active { transform: scale(0.98); }
+button.primary {
+  position: relative; overflow: hidden;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, #fff 12%), var(--accent) 55%, color-mix(in srgb, var(--accent) 82%, #000 18%));
+  border: none; color: #fff; padding: 12px 16px; border-radius: 9px; cursor: pointer; font-weight: 700;
+  box-shadow: 0 2px 10px -2px color-mix(in srgb, var(--accent) 60%, transparent), inset 0 1px 0 rgba(255,255,255,0.28);
+  transition: transform 0.07s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+button.primary:hover { filter: brightness(1.06); box-shadow: 0 4px 16px -3px color-mix(in srgb, var(--accent) 70%, transparent), inset 0 1px 0 rgba(255,255,255,0.3); }
+button.primary:active { transform: translateY(1px) scale(0.995); }
+/* One-shot sheen sweep on the big CTAs. */
+button.primary.big::after {
+  content: ""; position: absolute; top: 0; left: -60%; width: 45%; height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.35), transparent);
+  transform: skewX(-18deg); animation: sheen 3.6s ease-in-out 1s infinite;
+}
+@keyframes sheen { 0% { left: -60%; } 22%, 100% { left: 130%; } }
+button.primary.big { width: 100%; font-size: 15px; min-height: 48px; letter-spacing: 0.3px; }
 
 .leaders-final { margin: 6px 0 14px; text-align: left; }
 .leaders-final h3 { font-size: 13px; margin: 0 0 6px; color: var(--accent-2); }
@@ -364,12 +394,33 @@ button.primary.big { width: 100%; font-size: 15px; min-height: 48px; }
 .app-setup {
   height: 100dvh; overflow-y: auto; -webkit-overflow-scrolling: touch;
   padding: 16px max(12px, env(safe-area-inset-left)) 28px max(12px, env(safe-area-inset-right));
+  position: relative;
+  background:
+    radial-gradient(1200px 600px at 15% -5%, rgba(46,111,219,0.18), transparent 60%),
+    radial-gradient(1000px 560px at 100% 10%, rgba(255,210,30,0.10), transparent 55%),
+    radial-gradient(900px 700px at 50% 115%, rgba(90,209,127,0.12), transparent 60%),
+    #07090d;
+  background-attachment: fixed;
 }
+/* Slow drifting field-light glow behind the cards. */
+.app-setup::before {
+  content: ""; position: fixed; inset: -20% -10% -10%; z-index: 0; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(46,111,219,0.14), transparent 70%);
+  animation: drift 18s ease-in-out infinite;
+}
+@keyframes drift {
+  0%,100% { transform: translate(-6%, -4%) scale(1); opacity: 0.8; }
+  50% { transform: translate(8%, 6%) scale(1.15); opacity: 1; }
+}
+.app-setup > * { position: relative; z-index: 1; }
 .setup { display: flex; justify-content: center; }
 .setup-card {
   width: 100%; max-width: 560px;
-  background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px;
+  box-shadow: 0 18px 50px -18px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.05);
+  animation: card-rise 0.4s cubic-bezier(0.2,0.9,0.3,1) both;
 }
+@keyframes card-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 .setup-card h2 { margin: 0 0 2px; font-size: 22px; }
 /* Keep Kickoff visible while scrolling the (now taller) setup card. */
 .setup-kick {
@@ -413,7 +464,9 @@ button.primary.big { width: 100%; font-size: 15px; min-height: 48px; }
   .chip:hover { border-color: var(--accent); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .banner, .banner-score, .sheet, .dt-icon { animation: none !important; }
+  .banner, .banner-score, .sheet, .dt-icon,
+  .app-setup::before, .setup-card, .season-card, .overlay-card, .overlay,
+  button.primary.big::after, .tb-pts.bump { animation: none !important; }
 }
 
 /* ---- season mode ---- */
@@ -424,7 +477,11 @@ button.primary.big { width: 100%; font-size: 15px; min-height: 48px; }
 .ghost-btn.danger { color: #f87171; border-color: #6b2b2b; }
 
 .season-hub { min-height: 100dvh; padding: 12px; display: flex; justify-content: center; }
-.season-card { width: 100%; max-width: 560px; padding: 16px; align-self: flex-start; }
+.season-card {
+  width: 100%; max-width: 560px; padding: 16px; align-self: flex-start;
+  box-shadow: 0 18px 50px -18px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.05);
+  animation: card-rise 0.4s cubic-bezier(0.2,0.9,0.3,1) both;
+}
 .season-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .season-head h2 { margin: 0; font-size: 20px; }
 .season-sub { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
@@ -495,3 +552,21 @@ button.primary.big { width: 100%; font-size: 15px; min-height: 48px; }
 .rt-old { color: var(--muted); text-decoration: line-through; }
 .rt-arrow { color: var(--muted); }
 .rt-new em { color: var(--accent-2); font-style: normal; font-size: 10px; }
+
+/* ---- interaction polish ---- */
+.dock-tools button, .dock-speed button, .chip, .close-btn, .rv-tab, .conv-btn, .act-btn {
+  transition: transform 0.06s ease, border-color 0.14s ease, background 0.14s ease, filter 0.14s ease;
+}
+.dock-tools button:active, .dock-speed button:active, .chip:active,
+.close-btn:active, .conv-btn:active, .act-btn:active { transform: scale(0.95); }
+.dock-speed button.active { box-shadow: 0 0 12px -2px color-mix(in srgb, var(--accent) 70%, transparent); }
+.chip.active { box-shadow: 0 0 12px -3px color-mix(in srgb, var(--accent) 65%, transparent); }
+.matchup { transition: box-shadow 0.2s ease; }
+.matchup.champ { box-shadow: 0 0 26px -8px color-mix(in srgb, var(--accent-2) 60%, transparent); }
+.standings-row.you { box-shadow: inset 2px 0 0 var(--accent); }
+.resume-btn { transition: transform 0.06s ease, border-color 0.14s ease; }
+.resume-btn:hover { border-color: #46a35f; }
+.resume-btn:active { transform: scale(0.99); }
+.rv-tab.active { box-shadow: 0 0 14px -4px color-mix(in srgb, var(--accent) 60%, transparent); }
+/* Ratings OVR badges get a subtle glow at the top end. */
+.ov-elite { text-shadow: 0 0 10px rgba(251,191,36,0.5); }

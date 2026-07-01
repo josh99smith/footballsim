@@ -1,4 +1,21 @@
+import { useEffect, useRef, useState } from "react";
 import { useGame } from "../store/gameStore";
+
+/** Returns true for ~600ms after `value` increases (for a score-pop flash). */
+function useBump(value: number): boolean {
+  const [bump, setBump] = useState(false);
+  const prev = useRef(value);
+  useEffect(() => {
+    if (value > prev.current) {
+      setBump(true);
+      const t = setTimeout(() => setBump(false), 600);
+      prev.current = value;
+      return () => clearTimeout(t);
+    }
+    prev.current = value;
+  }, [value]);
+  return bump;
+}
 
 const fmtClock = (s: number): string => {
   const m = Math.floor(Math.max(0, s) / 60);
@@ -15,13 +32,15 @@ export function TopBar() {
   const spot = ballOn < 50 ? `OWN ${ballOn}` : ballOn > 50 ? `OPP ${100 - ballOn}` : "50";
   const togo = s.info.distance >= 100 - ballOn ? "& Goal" : `& ${Math.round(s.info.distance)}`;
   const hasBallHome = s.info.possession === "home";
+  const homeBump = useBump(s.info.score.home);
+  const awayBump = useBump(s.info.score.away);
 
   return (
     <div className="topbar">
       <div className={`tb-team ${hasBallHome ? "has" : ""}`}>
         <span className="tb-dot" style={{ background: s.homeColor }} />
         <span className="tb-abbr">{s.homeAbbr || "HOME"}</span>
-        <span className="tb-pts">{s.info.score.home}</span>
+        <span className={`tb-pts ${homeBump ? "bump" : ""}`}>{s.info.score.home}</span>
         {hasBallHome && <span className="tb-poss">🏈</span>}
       </div>
 
@@ -32,7 +51,7 @@ export function TopBar() {
 
       <div className={`tb-team away ${!hasBallHome ? "has" : ""}`}>
         {!hasBallHome && <span className="tb-poss">🏈</span>}
-        <span className="tb-pts">{s.info.score.away}</span>
+        <span className={`tb-pts ${awayBump ? "bump" : ""}`}>{s.info.score.away}</span>
         <span className="tb-abbr">{s.awayAbbr || "AWAY"}</span>
         <span className="tb-dot" style={{ background: s.awayColor }} />
       </div>
