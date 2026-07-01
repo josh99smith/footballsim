@@ -1,6 +1,6 @@
 import { FIELD } from "./constants";
 import { PlaySim, type PlaySetup } from "./engine";
-import { getDefPlay, getOffPlay } from "./playbook";
+import { getDefPlay, getOffPlay, mirrorOffPlay } from "./playbook";
 import { applyGameplan, NEUTRAL_GAMEPLAN, type Gameplan } from "./gameplan";
 import { rulesFor, type League, type Rules } from "./rules";
 import { RNG } from "./rng";
@@ -140,13 +140,14 @@ export class GameFlow {
 
   // ---- snap creation ----
 
-  createSnap(offPlayId: string, defPlayId: string): PlaySim {
+  createSnap(offPlayId: string, defPlayId: string, flip = false): PlaySim {
     const offTeam = this.teams[this.possession];
     const defTeam = this.teams[other(this.possession)];
     const offPlan = this.gameplans[this.possession];
     const defPlan = this.gameplans[other(this.possession)];
+    const offPlay = flip ? mirrorOffPlay(getOffPlay(offPlayId)) : getOffPlay(offPlayId);
     const setup: PlaySetup = {
-      offPlay: getOffPlay(offPlayId),
+      offPlay,
       defPlay: getDefPlay(defPlayId),
       offRoster: offTeam.offense.map((pl) => ({ ...pl, ratings: applyGameplan(pl.ratings, pl.pos, offPlan) })),
       defRoster: defTeam.defense.map((pl) => ({ ...pl, ratings: applyGameplan(pl.ratings, pl.pos, defPlan) })),

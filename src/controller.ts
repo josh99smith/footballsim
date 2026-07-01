@@ -46,6 +46,8 @@ export interface GameSetup {
 export interface GameInput {
   t: "off" | "def" | "st" | "convert" | "clock" | "timeout" | "plan";
   v?: string;
+  /** Offense play called flipped to the opposite side. */
+  f?: boolean;
 }
 
 export interface GameSave {
@@ -320,10 +322,10 @@ export class GameController {
   }
 
   // user picks
-  userPickOffense(id: string): void {
+  userPickOffense(id: string, flip = false): void {
     if (this.callSide !== "offense" || this.phase !== "preSnap") return;
-    this.record({ t: "off", v: id });
-    this.snap(id, this.pendingHiddenCall ?? DEF_PLAYS[0].id);
+    this.record({ t: "off", v: id, f: flip || undefined });
+    this.snap(id, this.pendingHiddenCall ?? DEF_PLAYS[0].id, flip);
   }
   userPickDefense(id: string): void {
     if (this.callSide !== "defense" || this.phase !== "preSnap") return;
@@ -373,7 +375,7 @@ export class GameController {
     this.speed = "instant"; // resolve each play synchronously
     for (const inp of save.inputs) {
       switch (inp.t) {
-        case "off": this.userPickOffense(inp.v!); break;
+        case "off": this.userPickOffense(inp.v!, inp.f); break;
         case "def": this.userPickDefense(inp.v!); break;
         case "st": this.userSpecialTeams(inp.v as "punt" | "fieldGoal"); break;
         case "clock": this.userClockPlay(inp.v as "kneel" | "spike"); break;
@@ -637,13 +639,13 @@ export class GameController {
     this.captureBoth();
   }
 
-  private snap(offId: string, defId: string): void {
+  private snap(offId: string, defId: string, flip = false): void {
     // Pre-snap flags (false start / offside) can wipe out the play.
     if (this.maybePreSnapPenalty()) return;
     this.aiCallName = this.callSide === "offense"
       ? defPlayLabel(defId)
       : offPlayLabel(offId);
-    this.sim = this.flow.createSnap(offId, defId);
+    this.sim = this.flow.createSnap(offId, defId, flip);
     this.liveEvents = [];
     this.trails.clear();
     this.effects = [];

@@ -445,3 +445,22 @@ export const getOffPlay = (id: string): OffPlay =>
   OFF_PLAYS.find((p) => p.id === id) ?? OFF_PLAYS[0];
 export const getDefPlay = (id: string): DefPlay =>
   DEF_PLAYS.find((p) => p.id === id) ?? DEF_PLAYS[0];
+
+/** Mirror an assignment left↔right (negate every lateral component). */
+function mirrorAssign(a: Assignment): Assignment {
+  switch (a.kind) {
+    case "carry": return { ...a, aimGap: -a.aimGap };
+    case "runRoute": return { ...a, waypoints: a.waypoints.map((w) => ({ x: w.x, y: -w.y })) };
+    case "block": return a.gap != null ? { ...a, gap: -a.gap } : a;
+    default: return a;
+  }
+}
+
+/** Flip a play to the other side — mirror every alignment and route so a play
+ *  drawn to the right runs to the left. Used by the "Flip" call option. */
+export function mirrorOffPlay(p: OffPlay): OffPlay {
+  return {
+    ...p,
+    roles: p.roles.map((r) => ({ ...r, dy: -r.dy, assign: mirrorAssign(r.assign) })),
+  };
+}

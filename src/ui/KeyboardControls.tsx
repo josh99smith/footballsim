@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useGame } from "../store/gameStore";
+import { useUI } from "../store/uiStore";
 import { OFF_PLAYS, DEF_PLAYS } from "../sim/playbook";
 import type { Speed } from "../controller";
 import { sound } from "../audio/sound";
@@ -48,11 +49,16 @@ export function KeyboardControls() {
       // Play selection.
       if (g.phase === "preSnap" && g.callSide) {
         const list = g.callSide === "offense" ? OFF_PLAYS : DEF_PLAYS;
+        const lowerKey = key.toLowerCase();
+        // Flip the next offensive call.
+        if (lowerKey === "f" && g.callSide === "offense") { useUI.getState().togglePlayFlip(); return; }
         const n = Number(key);
         if (Number.isInteger(n) && n >= 1 && n <= list.length) {
           const id = list[n - 1].id;
-          if (g.callSide === "offense") g.pickOffense(id);
-          else g.pickDefense(id);
+          if (g.callSide === "offense") {
+            g.pickOffense(id, useUI.getState().playFlip);
+            useUI.getState().setPlayFlip(false);
+          } else g.pickDefense(id);
           return;
         }
         const lower = key.toLowerCase();

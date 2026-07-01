@@ -14,7 +14,7 @@ export const controller = new GameController(INITIAL_SEED, DEFAULT_CONFIG);
 
 interface StoreState extends UIState {
   // actions
-  pickOffense: (id: string) => void;
+  pickOffense: (id: string, flip?: boolean) => void;
   pickDefense: (id: string) => void;
   specialTeams: (kind: "punt" | "fieldGoal") => void;
   clockPlay: (kind: "kneel" | "spike") => void;
@@ -61,7 +61,7 @@ function initial(): UIState {
 
 export const useGame = create<StoreState>(() => ({
   ...initial(),
-  pickOffense: (id) => controller.userPickOffense(id),
+  pickOffense: (id, flip) => controller.userPickOffense(id, flip),
   pickDefense: (id) => controller.userPickDefense(id),
   specialTeams: (kind) => controller.userSpecialTeams(kind),
   clockPlay: (kind) => controller.userClockPlay(kind),

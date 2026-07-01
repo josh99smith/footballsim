@@ -13,6 +13,10 @@ interface UIStore {
    *  in-game, where the live controller rosters are used instead. */
   previewRosters: RostersView | null;
   openRatingsPreview: (r: RostersView) => void;
+  /** Whether the next offensive call is flipped to the opposite side. */
+  playFlip: boolean;
+  setPlayFlip: (b: boolean) => void;
+  togglePlayFlip: () => void;
 }
 
 export const useUI = create<UIStore>((set) => ({
@@ -24,4 +28,7 @@ export const useUI = create<UIStore>((set) => ({
   toggleRatings: () => set((s) => ({ ratingsOpen: !s.ratingsOpen, previewRosters: null })),
   previewRosters: null,
   openRatingsPreview: (r) => set({ ratingsOpen: true, previewRosters: r }),
+  playFlip: false,
+  setPlayFlip: (b) => set({ playFlip: b }),
+  togglePlayFlip: () => set((s) => ({ playFlip: !s.playFlip })),
 }));
