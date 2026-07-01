@@ -26,6 +26,7 @@ export function PlaySheet() {
   const flip = useUI((u) => u.playFlip);
   const togglePlayFlip = useUI((u) => u.togglePlayFlip);
   const setPlayFlip = useUI((u) => u.setPlayFlip);
+  const setAdjustOpen = useUI((u) => u.setAdjustOpen);
 
   const callingOffense = s.callSide === "offense";
   const plays: (OffPlay | DefPlay)[] = callingOffense ? OFF_PLAYS : DEF_PLAYS;
@@ -87,7 +88,13 @@ export function PlaySheet() {
               ⇄ Flip{flip ? " ✓" : ""}
             </button>
           )}
-          <span className="sheet-tag">You: {s.userTeam === "home" ? s.homeAbbr : s.awayAbbr}</span>
+          <button
+            className="flip-btn adjust-open"
+            onClick={() => setAdjustOpen(true)}
+            title="Mid-game coaching adjustment (A)"
+          >
+            ⚙ Adjust
+          </button>
         </div>
       </div>
 

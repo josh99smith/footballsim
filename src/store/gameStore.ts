@@ -28,6 +28,7 @@ interface StoreState extends UIState {
   loadCode: (code: string) => boolean;
   shareCode: () => string;
   confirmHalftime: (plan: Gameplan) => void;
+  adjustGameplan: (plan: Gameplan) => void;
 }
 
 function initial(): UIState {
@@ -84,6 +85,7 @@ export const useGame = create<StoreState>(() => ({
   },
   shareCode: () => { const sv = controller.getSave(); return sv ? encodeCode(sv) : ""; },
   confirmHalftime: (plan) => controller.confirmHalftime(plan),
+  adjustGameplan: (plan) => controller.adjustGameplan(plan),
 }));
 
 // Wire controller -> store. Discrete updates mirror to React and drive autosave.

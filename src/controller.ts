@@ -47,7 +47,7 @@ export interface GameSetup {
 /** A recorded user action. Replaying these from the setup reconstructs the
  *  exact game (the sim + AI are deterministic given the seed). */
 export interface GameInput {
-  t: "off" | "def" | "st" | "convert" | "clock" | "timeout" | "plan";
+  t: "off" | "def" | "st" | "convert" | "clock" | "timeout" | "plan" | "adjust";
   v?: string;
   /** Offense play called flipped to the opposite side. */
   f?: boolean;
@@ -406,6 +406,7 @@ export class GameController {
         case "timeout": this.userTimeout(); break;
         case "convert": this.userConvert(inp.v as "xp" | "two"); break;
         case "plan": this.confirmHalftime(JSON.parse(inp.v!) as Gameplan); break;
+        case "adjust": this.adjustGameplan(JSON.parse(inp.v!) as Gameplan); break;
       }
       if (this.flow.gameOver) break;
     }
@@ -747,10 +748,21 @@ export class GameController {
   confirmHalftime(plan: Gameplan): void {
     if (this.phase !== "halftime") return;
     this.gameplan = { ...NEUTRAL_GAMEPLAN, ...plan };
-    this.flow.setGameplan("home", this.gameplan);
+    this.flow.setGameplan(this.userTeam, this.gameplan);
     this.record({ t: "plan", v: JSON.stringify(this.gameplan) });
     this.atHalftime = false;
     this.beginPlaySelection();
+  }
+
+  /** Mid-game coaching adjustment: re-tune the user's game plan on the fly
+   *  (takes effect on the next snap). Recorded separately from halftime so it
+   *  never triggers a phase change and replays deterministically. */
+  adjustGameplan(plan: Gameplan): void {
+    if (this.phase !== "preSnap") return;
+    this.gameplan = { ...NEUTRAL_GAMEPLAN, ...plan };
+    this.flow.setGameplan(this.userTeam, this.gameplan);
+    this.record({ t: "adjust", v: JSON.stringify(this.gameplan) });
+    this.publish();
   }
 
   // ---- conversions & post-play moments ----

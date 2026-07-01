@@ -222,6 +222,23 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .conv-title { font-weight: 700; font-size: 15px; }
 .conv-sub { font-size: 11px; color: var(--muted); }
 
+/* mid-game adjustment overlay */
+.adjust-card { max-width: 460px; }
+.adj-note { margin: 0 0 10px; font-size: 12px; color: var(--muted); line-height: 1.4; }
+.adj-scout b { color: var(--text); }
+.adj-presets { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+.adj-preset {
+  font-size: 11.5px; font-weight: 700; padding: 9px 4px; border-radius: 8px; cursor: pointer;
+  background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+  transition: transform 0.06s, border-color 0.14s, background 0.14s;
+}
+.adj-preset:active { transform: scale(0.95); }
+.adj-preset.offense { border-color: #3a5a8c; }
+.adj-preset.offense:active { background: #24344f; }
+.adj-preset.defense { border-color: #7a3a3a; }
+.adj-preset.defense:active { background: #4a2424; }
+.adjust-open { color: var(--accent-2); }
+
 /* coach picker (setup / season) */
 .coach-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 @media (min-width: 460px) { .coach-grid { grid-template-columns: 1fr 1fr 1fr; } }

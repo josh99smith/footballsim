@@ -52,6 +52,8 @@ export function KeyboardControls() {
         const lowerKey = key.toLowerCase();
         // Flip the next offensive call.
         if (lowerKey === "f" && g.callSide === "offense") { useUI.getState().togglePlayFlip(); return; }
+        // Open the mid-game coaching adjustment panel.
+        if (lowerKey === "a") { useUI.getState().setAdjustOpen(true); return; }
         const n = Number(key);
         if (Number.isInteger(n) && n >= 1 && n <= list.length) {
           const id = list[n - 1].id;

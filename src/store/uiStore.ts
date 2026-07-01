@@ -17,6 +17,9 @@ interface UIStore {
   playFlip: boolean;
   setPlayFlip: (b: boolean) => void;
   togglePlayFlip: () => void;
+  /** Mid-game coaching-adjustment overlay. */
+  adjustOpen: boolean;
+  setAdjustOpen: (b: boolean) => void;
 }
 
 export const useUI = create<UIStore>((set) => ({
@@ -31,4 +34,6 @@ export const useUI = create<UIStore>((set) => ({
   playFlip: false,
   setPlayFlip: (b) => set({ playFlip: b }),
   togglePlayFlip: () => set((s) => ({ playFlip: !s.playFlip })),
+  adjustOpen: false,
+  setAdjustOpen: (b) => set({ adjustOpen: b }),
 }));
