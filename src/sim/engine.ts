@@ -301,7 +301,10 @@ export class PlaySim {
           else this.updateBackfieldWait(a);
           break;
         case "runRoute":
-          this.updateRouteRunner(a);
+          // A receiver who caught the ball turns upfield and runs for YAC,
+          // rather than continuing to run his route.
+          if (a.hasBall) this.updateRunner(a);
+          else this.updateRouteRunner(a);
           break;
         case "block":
           this.updateBlocker(a);
@@ -321,12 +324,15 @@ export class PlaySim {
 
   private updateRunner(a: Agent): void {
     const aim = (this.byCarryAssign(a)?.aimGap ?? 0) + this.setup.ballY;
-    // Avoid the nearest unblocked defender at all times.
+    // Avoid the nearest unblocked defender. Shifty (agile) carriers cut a touch
+    // harder, but the move stays subtle so runners keep working north–south.
+    const juke = 0.48 + a.ratings.agility / 500; // ~0.65 .. 0.68
+    const seeThreat = 6;
     const { agent: nd, d } = this.nearestDefender(a.pos, (x) => !this.isEngagedByBlocker(x));
     let lateral = 0;
-    if (nd && d < 6) {
+    if (nd && d < seeThreat) {
       const away = a.pos.y - nd.pos.y;
-      lateral = Math.sign(away || 1) * (6 - d) * 0.55;
+      lateral = Math.sign(away || 1) * (seeThreat - d) * juke;
     }
     let target: Vec2;
     let burst = 1;
@@ -334,9 +340,11 @@ export class PlaySim {
       // Aim for the designed gap, but slide off the nearest defender.
       target = v(a.pos.x + 6, clamp(aim + lateral * 0.6, 2, FIELD.WIDTH - 2));
     } else {
-      // Past the line: find daylight downfield, hit it with a burst.
-      target = v(a.pos.x + 9, clamp(a.pos.y + lateral, 2, FIELD.WIDTH - 2));
-      burst = 1.06;
+      // Past the line / after the catch: attack downfield in stride, sliding
+      // off tacklers. Open grass lets a fast carrier lengthen his stride.
+      const open = !nd || d > seeThreat;
+      burst = open ? 1.06 + a.ratings.speed / 1600 : 1.05;
+      target = v(a.pos.x + 10, clamp(a.pos.y + lateral, 2, FIELD.WIDTH - 2));
     }
     steer(a, target, burst);
   }
@@ -673,6 +681,16 @@ export class PlaySim {
   }
 
   private reactToBall(a: Agent): void {
+    const carrier = this.carrier();
+    // Once the ball is caught, everyone converges on the RUNNER — never sit on
+    // the spot where the catch happened (that's what let receivers run free).
+    if (carrier && !this.ball.inAir && carrier.side === "off") {
+      // Take a pursuit angle: aim ahead of the carrier to cut him off rather
+      // than chase from behind (a trailing defender never catches a fast back).
+      const lead = add(carrier.pos, scale(carrier.vel, 0.5));
+      steer(a, lead, 1);
+      return;
+    }
     if (!this.ball.target) return;
     const d = dist(a.pos, this.ball.target);
     // Only break on the ball if it's close enough to make a play.
@@ -859,16 +877,22 @@ export class PlaySim {
     this.done = true;
     const carrier = extra.carrierId ? this.byId(extra.carrierId) : this.carrier();
     const yards = extra.yards ?? (carrier ? carrier.pos.x : 0);
+    // Attribute the outcome. A pass-play carrier who isn't the QB is a receiver
+    // who caught it (so a tackle/TD after the catch is still a completion), and
+    // a QB who tucked and ran is a scramble → record it as a rush.
+    const passPlay = extra.isPass ?? this.isPass;
+    const caughtByReceiver = passPlay && !!carrier && carrier.id !== this.qbId && carrier.side === "off";
+    const scrambledRun = passPlay && carrier?.id === this.qbId && this.scrambling;
     this.result = {
       yards: Math.round(yards * 10) / 10,
       endReason: reason,
       playTime: this.tick * DT,
       turnover: extra.turnover ?? reason === "interception",
       touchdown: extra.touchdown ?? reason === "touchdown",
-      isPass: extra.isPass ?? this.isPass,
+      isPass: scrambledRun ? false : passPlay,
       ballCarrierId: extra.carrierId ?? this.ball.carrierId,
-      passerId: extra.passerId,
-      targetId: extra.targetId,
+      passerId: extra.passerId ?? (caughtByReceiver ? (this.passerId ?? this.qbId) : undefined),
+      targetId: extra.targetId ?? (caughtByReceiver ? carrier!.id : undefined),
       tacklerId: extra.tacklerId,
       interceptorId: extra.interceptorId,
       sackerId: reason === "sack" ? extra.tacklerId : undefined,

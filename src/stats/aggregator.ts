@@ -134,11 +134,19 @@ export class StatsAggregator {
         d.def.tackles++;
       }
     } else if (result.isPass) {
+      // A completed pass never carries passResult "complete" (the play lives on
+      // for YAC and ends on a tackle/TD): it's a completion when the ball was
+      // caught — i.e. someone other than the passer is the carrier and it wasn't
+      // ruled incomplete or intercepted.
+      const completed =
+        result.passResult == null &&
+        !!carrier &&
+        carrier !== passer;
       if (passer) {
         const l = this.line(passer);
         l.pass ??= { att: 0, comp: 0, yds: 0, td: 0, int: 0 };
         l.pass.att++;
-        if (result.passResult === "complete" || (!result.passResult && yds !== 0 && carrier)) {
+        if (completed) {
           l.pass.comp++;
           l.pass.yds += yds;
           ot.passYards += yds;
@@ -146,7 +154,7 @@ export class StatsAggregator {
         }
         if (result.passResult === "intercepted") l.pass.int++;
       }
-      if (result.passResult === "complete" && carrier) {
+      if (completed && carrier) {
         const r = this.line(carrier);
         r.recv ??= { rec: 0, yds: 0, td: 0, long: 0 };
         r.recv.rec++;
