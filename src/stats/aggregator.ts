@@ -55,9 +55,12 @@ export class StatsAggregator {
   drives: DriveSummary[] = [];
 
   constructor(teams: { home: Team; away: Team }) {
-    for (const team of [teams.home, teams.away]) {
+    // Key by the home/away slot, not team.id — season rosters carry library
+    // ids (e.g. "kc"), so relying on team.id would misfile every player.
+    for (const side of ["home", "away"] as const) {
+      const team = teams[side];
       for (const p of [...team.offense, ...team.defense]) {
-        this.defLookup.set(p.id, { def: p, teamId: team.id });
+        this.defLookup.set(p.id, { def: p, teamId: side });
       }
     }
   }

@@ -1,5 +1,5 @@
 import { RNG } from "./rng";
-import type { PlayerDef, Position, Ratings, TeamId } from "./types";
+import type { PlayerDef, Position, Ratings } from "./types";
 
 /** Baseline rating profile per position. The generator jitters around these. */
 const PROFILES: Record<Position, Partial<Ratings> & { base: number }> = {
@@ -53,7 +53,10 @@ const DEFENSE: Position[] = [
 ];
 
 export interface Team {
-  id: TeamId;
+  /** Team key: "home"/"away" for exhibition, or a library id (e.g. "kc") in
+   *  Season mode. Used only for unique player-id prefixes, never as a
+   *  home/away discriminant (games key teams by object slot). */
+  id: string;
   name: string;
   abbr: string;
   color: string;
@@ -82,7 +85,7 @@ function buildUnit(rng: RNG, positions: Position[], prefix: string, teamShift: n
 
 /** Overall team rating target (~55 weak … ~90 elite). Roster shifts toward it. */
 export function generateTeam(
-  id: TeamId,
+  id: string,
   name: string,
   abbr: string,
   color: string,
