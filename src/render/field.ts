@@ -42,7 +42,6 @@ export function drawField(
 
   const scale = (h - 8) / cam.viewH;
   const fieldW = FIELD.WIDTH * scale;
-  const fieldH = FIELD.TOTAL_LENGTH * scale;
 
   // Orientation: flip the whole field 180° so the team ON OFFENSE always drives
   // toward the top of the screen (the camera swaps ends when you're defending).
@@ -51,21 +50,30 @@ export function drawField(
   const X = (yd: number): number => w / 2 + orient * (yd - cam.cy) * scale;
   const Y = (down: number): number => h / 2 - orient * (down - cam.cx) * scale;
 
+  // A full-width axis-aligned rect spanning downfield [dLo, dHi], computed from
+  // the true screen corners so it stays correct when the camera flips ends
+  // (orient = -1) — otherwise X(0) is the RIGHT edge and fills draw off-screen.
+  const fieldLeft = Math.min(X(0), X(FIELD.WIDTH));
+  const bandRect = (dLo: number, dHi: number): [number, number, number, number] => {
+    const a = Y(dLo), b = Y(dHi);
+    return [fieldLeft, Math.min(a, b), fieldW, Math.abs(b - a)];
+  };
+
   // Turf.
   ctx.fillStyle = "#1f7a3d";
-  ctx.fillRect(X(0), Y(FIELD.TOTAL_LENGTH), fieldW, fieldH);
+  ctx.fillRect(...bandRect(0, FIELD.TOTAL_LENGTH));
 
   // 10-yard mowing stripes (run across the field, stacked vertically).
   for (let yd = FIELD.END_ZONE; yd < FIELD.TOTAL_LENGTH - FIELD.END_ZONE; yd += 10) {
     ctx.fillStyle = (yd / 10) % 2 === 0 ? "#1c7038" : "#218040";
-    ctx.fillRect(X(0), Y(yd + 10), fieldW, 10 * scale);
+    ctx.fillRect(...bandRect(yd, yd + 10));
   }
 
   // Stadium lighting: a soft warm sheen sweeps the turf for depth, brightest
   // toward the top-centre (as if lit from the near stands).
   ctx.save();
   ctx.beginPath();
-  ctx.rect(X(0), Y(FIELD.TOTAL_LENGTH), fieldW, fieldH);
+  ctx.rect(...bandRect(0, FIELD.TOTAL_LENGTH));
   ctx.clip();
   const turfLight = ctx.createRadialGradient(
     w / 2, h * 0.34, 0, w / 2, h * 0.34, Math.max(w, h) * 0.75,
@@ -74,20 +82,21 @@ export function drawField(
   turfLight.addColorStop(0.5, "rgba(120,220,160,0.04)");
   turfLight.addColorStop(1, "rgba(0,20,10,0.16)");
   ctx.fillStyle = turfLight;
-  ctx.fillRect(X(0), Y(FIELD.TOTAL_LENGTH), fieldW, fieldH);
+  ctx.fillRect(...bandRect(0, FIELD.TOTAL_LENGTH));
   ctx.restore();
 
   // End zones (home at the bottom, away at the top), with team names.
   const drawEndzone = (fill: string, topYd: number) => {
+    const rect = bandRect(topYd - FIELD.END_ZONE, topYd);
     ctx.fillStyle = fill;
-    ctx.fillRect(X(0), Y(topYd), fieldW, FIELD.END_ZONE * scale);
+    ctx.fillRect(...rect);
     // Diagonal sheen for a painted-turf look.
     const sheen = ctx.createLinearGradient(X(0), Y(topYd), X(FIELD.WIDTH), Y(topYd - FIELD.END_ZONE));
     sheen.addColorStop(0, "rgba(255,255,255,0.10)");
     sheen.addColorStop(0.5, "rgba(255,255,255,0.02)");
     sheen.addColorStop(1, "rgba(0,0,0,0.14)");
     ctx.fillStyle = sheen;
-    ctx.fillRect(X(0), Y(topYd), fieldW, FIELD.END_ZONE * scale);
+    ctx.fillRect(...rect);
   };
   drawEndzone(opts.homeEndzone, FIELD.END_ZONE);
   drawEndzone(opts.awayEndzone, FIELD.TOTAL_LENGTH);
@@ -161,7 +170,7 @@ export function drawField(
   // Sideline border.
   ctx.strokeStyle = "rgba(255,255,255,0.9)";
   ctx.lineWidth = 2;
-  ctx.strokeRect(X(0), Y(FIELD.TOTAL_LENGTH), fieldW, fieldH);
+  ctx.strokeRect(...bandRect(0, FIELD.TOTAL_LENGTH));
 
   // Pylons at the four corners of the playing field.
   ctx.fillStyle = "#ff8a1e";
