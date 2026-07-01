@@ -131,10 +131,6 @@ export function SetupScreen() {
           />
         </div>
 
-        <button className="primary big" onClick={() => startGame(setup)}>
-          Kickoff →
-        </button>
-
         <div className="setup-extra">
           <button className="link-btn" onClick={() => setShowImport((v) => !v)}>
             {showImport ? "Hide" : "Load a shared game code"}
@@ -170,6 +166,12 @@ export function SetupScreen() {
             ))}
           </div>
         )}
+
+        <div className="setup-kick">
+          <button className="primary big" onClick={() => startGame(setup)}>
+            Kickoff →
+          </button>
+        </div>
       </div>
     </div>
   );

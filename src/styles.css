@@ -307,7 +307,7 @@ button.primary.big { width: 100%; font-size: 15px; min-height: 48px; }
    SETUP SCREEN — a normal scrollable page (not the stage).
    ===================================================================== */
 .app-setup {
-  min-height: 100dvh; overflow-y: auto;
+  height: 100dvh; overflow-y: auto; -webkit-overflow-scrolling: touch;
   padding: 16px max(12px, env(safe-area-inset-left)) 28px max(12px, env(safe-area-inset-right));
 }
 .setup { display: flex; justify-content: center; }
@@ -316,6 +316,14 @@ button.primary.big { width: 100%; font-size: 15px; min-height: 48px; }
   background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px;
 }
 .setup-card h2 { margin: 0 0 2px; font-size: 22px; }
+/* Keep Kickoff visible while scrolling the (now taller) setup card. */
+.setup-kick {
+  position: sticky;
+  bottom: 0;
+  margin: 8px -16px -16px;
+  padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
+  background: linear-gradient(transparent, var(--panel) 45%);
+}
 .setup-tagline { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
 .setup-section { margin-bottom: 16px; }
 .setup-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
