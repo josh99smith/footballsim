@@ -40,14 +40,29 @@ button, input[type="range"] {
   max-width: 520px;
   margin: 0 auto;
   overflow: hidden;
-  background: #103a20;
+  /* Dark "stadium" backdrop shows where the tilted field recedes upfield. */
+  background: radial-gradient(120% 80% at 50% 0%, #123f24 0%, #0a2415 45%, #050f0a 100%);
 }
 @media (min-width: 540px) {
   .stage { border-left: 1px solid var(--border); border-right: 1px solid var(--border); box-shadow: 0 0 40px rgba(0,0,0,0.6); }
 }
 
-.field-layer { position: absolute; inset: 0; }
-.field-layer canvas { display: block; width: 100%; height: 100%; }
+/* Presentation camera: tilt the field plane in 3D so the action reads like a
+   raised-sideline broadcast angle. The canvas buffer stays full-res (crisp);
+   only its display is transformed. DOM overlays are outside .field-layer so
+   the scoreboard/dock stay flat and legible. */
+.field-layer {
+  position: absolute; inset: 0;
+  perspective: 1000px;
+  perspective-origin: 50% 40%;
+}
+.field-layer canvas {
+  display: block; width: 100%; height: 100%;
+  transform: rotateX(28deg) scale(1.2) translateY(2%);
+  transform-origin: 50% 58%;
+  will-change: transform;
+  backface-visibility: hidden;
+}
 
 /* ---- top scoreboard overlay ---- */
 .topbar {
