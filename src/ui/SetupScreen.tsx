@@ -4,6 +4,8 @@ import type { Difficulty, GameSetup } from "../controller";
 import { getRecents, loadGame } from "../store/persistence";
 import { GameplanControls } from "./GameplanControls";
 import { NEUTRAL_GAMEPLAN } from "../sim/gameplan";
+import type { League } from "../sim/rules";
+import { teamsForLeague } from "../sim/teams";
 
 const QUARTERS: { label: string; sec: number }[] = [
   { label: "3 min", sec: 180 },
@@ -31,6 +33,23 @@ export function SetupScreen() {
   const patch = (p: Partial<GameSetup>) => setSetup((s) => ({ ...s, ...p }));
   const patchTeam = (side: "home" | "away", p: Partial<GameSetup["home"]>) =>
     setSetup((s) => ({ ...s, [side]: { ...s[side], ...p } }));
+
+  const league: League = setup.league ?? "pro";
+  const leagueTeams = teamsForLeague(league);
+
+  const setLeague = (lg: League) => {
+    const opts = teamsForLeague(lg);
+    const pick = (o: (typeof opts)[number]) => ({ name: o.name, abbr: o.abbr, color: o.color });
+    setSetup((s) => ({
+      ...s, league: lg,
+      home: { ...s.home, ...pick(opts[0]) },
+      away: { ...s.away, ...pick(opts[Math.min(5, opts.length - 1)]) },
+    }));
+  };
+  const pickTeam = (side: "home" | "away", id: string) => {
+    const o = leagueTeams.find((t) => t.id === id);
+    if (o) patchTeam(side, { name: o.name, abbr: o.abbr, color: o.color });
+  };
 
   return (
     <div className="setup">
@@ -76,10 +95,40 @@ export function SetupScreen() {
           </div>
         </div>
 
+        <div className="setup-section">
+          <label className="setup-label">League &amp; rules</label>
+          <div className="chip-row">
+            {(["pro", "college"] as League[]).map((lg) => (
+              <button
+                key={lg}
+                className={`chip ${league === lg ? "active" : ""}`}
+                onClick={() => setLeague(lg)}
+              >
+                {lg === "pro" ? "🏈 Pro" : "🎓 College"}
+              </button>
+            ))}
+          </div>
+          <p className="setup-hint">
+            {league === "college"
+              ? "Clock stops on first downs · shorter XP · PI capped at 15 · alternating overtime (no ties)."
+              : "Running clock · longer XP · spot-foul PI · sudden-death overtime · ties possible."}
+          </p>
+        </div>
+
         <div className="setup-teams">
           {(["home", "away"] as const).map((side) => (
             <div key={side} className="setup-team">
               <h3>{side === "home" ? "Home (You)" : "Away (AI)"}</h3>
+              <select
+                className="setup-input team-select"
+                value={leagueTeams.find((t) => t.abbr === setup[side].abbr && t.name === setup[side].name)?.id ?? ""}
+                onChange={(e) => pickTeam(side, e.target.value)}
+              >
+                <option value="">Custom…</option>
+                {leagueTeams.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
               <div className="setup-field-row">
                 <input
                   className="setup-input name"

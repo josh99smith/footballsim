@@ -37,7 +37,7 @@ function initial(): UIState {
     info: {
       quarter: 1, clock: DEFAULT_CONFIG.quarterSeconds, possession: "home",
       down: 1, distance: 10, ballOn: 25, score: { home: 0, away: 0 }, gameOver: false,
-      timeouts: { home: 3, away: 3 }, pendingConversion: null,
+      timeouts: { home: 3, away: 3 }, pendingConversion: null, league: "pro", overtime: 0,
     },
     banner: null,
     homeName: "", awayName: "", homeAbbr: "", awayAbbr: "",

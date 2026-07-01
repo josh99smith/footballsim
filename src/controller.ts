@@ -11,6 +11,7 @@ import { RNG } from "./sim/rng";
 import { DEFAULT_TEAMS, type Team } from "./sim/roster";
 import { DEF_PLAYS, OFF_PLAYS } from "./sim/playbook";
 import { NEUTRAL_GAMEPLAN, deriveAiGameplan, type Gameplan } from "./sim/gameplan";
+import type { League } from "./sim/rules";
 import { StatsAggregator } from "./stats/aggregator";
 import type { PlayResult, SimEvent, TeamId } from "./sim/types";
 import type { Vec2 } from "./sim/vec2";
@@ -29,6 +30,8 @@ export interface GameSetup {
   seed: number;
   quarterSeconds: number;
   difficulty: Difficulty;
+  /** Optional so older saves / share codes still load (defaults to pro). */
+  league?: League;
   home: { name: string; abbr: string; color: string };
   away: { name: string; abbr: string; color: string };
   /** Optional so older saves / share codes still load (defaults to neutral). */
@@ -172,6 +175,7 @@ export class GameController {
   private seed: number;
   private cfg: GameConfig;
   private difficulty: Difficulty = "normal";
+  private league: League = "pro";
   private gameplan: Gameplan = { ...NEUTRAL_GAMEPLAN }; // user (home) plan
   private aiGameplan: Gameplan = { ...NEUTRAL_GAMEPLAN };
   private atHalftime = false;
@@ -230,7 +234,8 @@ export class GameController {
     this.setup = { ...setup, home: { ...setup.home }, away: { ...setup.away } };
     this.inputs = [];
     this.seed = setup.seed >>> 0;
-    this.cfg = { quarterSeconds: setup.quarterSeconds };
+    this.league = setup.league ?? "pro";
+    this.cfg = { quarterSeconds: setup.quarterSeconds, league: this.league };
     this.difficulty = setup.difficulty;
     this.gameplan = { ...NEUTRAL_GAMEPLAN, ...(setup.gameplan ?? {}) };
     this.aiGameplan = deriveAiGameplan(this.seed);
@@ -290,6 +295,7 @@ export class GameController {
       seed: this.seed,
       quarterSeconds: this.cfg.quarterSeconds,
       difficulty: this.difficulty,
+      league: this.league,
       home: { name: this.teams.home.name, abbr: this.teams.home.abbr, color: this.teams.home.color },
       away: { name: this.teams.away.name, abbr: this.teams.away.abbr, color: this.teams.away.color },
       gameplan: { ...this.gameplan },

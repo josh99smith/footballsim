@@ -2,15 +2,17 @@ import { FIELD } from "./constants";
 import { PlaySim, type PlaySetup } from "./engine";
 import { getDefPlay, getOffPlay } from "./playbook";
 import { applyGameplan, NEUTRAL_GAMEPLAN, type Gameplan } from "./gameplan";
+import { rulesFor, type League, type Rules } from "./rules";
 import { RNG } from "./rng";
 import type { Team } from "./roster";
 import type { PlayResult, TeamId } from "./types";
 
 export interface GameConfig {
   quarterSeconds: number;
+  league?: League;
 }
 
-export const DEFAULT_CONFIG: GameConfig = { quarterSeconds: 300 };
+export const DEFAULT_CONFIG: GameConfig = { quarterSeconds: 300, league: "pro" };
 
 export interface GameInfo {
   quarter: number;
@@ -24,6 +26,9 @@ export interface GameInfo {
   timeouts: { home: number; away: number };
   /** Team that just scored a TD and owes an extra-point / two-point try. */
   pendingConversion: TeamId | null;
+  league: League;
+  /** 0 in regulation; the overtime period/round number once in OT. */
+  overtime: number;
 }
 
 export type SpecialTeams = "punt" | "fieldGoal";
@@ -56,10 +61,13 @@ const ordinalDown = (n: number): string =>
 export class GameFlow {
   private cfg: GameConfig;
   readonly rng: RNG;
+  readonly rules: Rules;
   readonly teams: { home: Team; away: Team };
 
   quarter = 1;
   clock: number;
+  /** 0 in regulation; OT period (sudden) or round (college) once in overtime. */
+  overtime = 0;
   possession: TeamId = "home";
   down = 1;
   distance = 10;
@@ -76,11 +84,15 @@ export class GameFlow {
   private clockStopNext = false;
   /** True once the two-minute warning has fired this half. */
   twoMinuteFired = false;
+  // overtime bookkeeping
+  private otFirstTeam: TeamId = "home";
+  private otPoss = 0; // possessions taken in the current college-OT round
 
   constructor(teams: { home: Team; away: Team }, rng: RNG, cfg = DEFAULT_CONFIG) {
     this.teams = teams;
     this.rng = rng;
     this.cfg = cfg;
+    this.rules = rulesFor(cfg.league ?? "pro");
     this.clock = cfg.quarterSeconds;
     // Coin toss: winner receives.
     this.possession = rng.chance(0.5) ? "home" : "away";
@@ -98,6 +110,8 @@ export class GameFlow {
       gameOver: this.gameOver,
       timeouts: { ...this.timeouts },
       pendingConversion: this.pendingConversion,
+      league: this.rules.league,
+      overtime: this.overtime,
     };
   }
 
@@ -156,6 +170,10 @@ export class GameFlow {
 
     // Interception: possession flips at the spot of the catch.
     if (result.endReason === "interception") {
+      if (this.isCollegeOT) {
+        this.endCollegeOTPossession();
+        return { text: `INTERCEPTED! ${this.teams[offTeam].abbr}'s possession ends.`, scored: false, changedPossession: true, firstDown: false, isScore: null };
+      }
       const spot = Math.round(this.ballOn + result.yards);
       this.flipPossession(spot);
       this.runClock(result, true, offTeam);
@@ -176,7 +194,10 @@ export class GameFlow {
     // coach can choose. No kickoff until the conversion is done.
     if (result.touchdown || newBallOn >= 100) {
       this.score[offTeam] += 6;
-      this.pendingConversion = offTeam;
+      if (this.suddenScore()) {
+        return { text: `TOUCHDOWN ${this.teams[offTeam].abbr}! Ballgame.`, scored: true, changedPossession: false, firstDown: false, isScore: { type: "TD", team: offTeam } };
+      }
+      this.pendingConversion = offTeam; // conversion (then OT possession end) resolves next
       this.runClock(result, true, offTeam);
       return {
         text: `TOUCHDOWN ${this.teams[offTeam].abbr}!`,
@@ -190,7 +211,11 @@ export class GameFlow {
     // Safety: tackled in own end zone.
     if (newBallOn <= 0) {
       this.score[other(offTeam)] += 2;
-      this.kickoffTo(offTeam); // conceding team free-kicks
+      if (this.suddenScore()) {
+        return { text: `SAFETY! Ballgame.`, scored: true, changedPossession: true, firstDown: false, isScore: { type: "SAFETY", team: other(offTeam) } };
+      }
+      if (this.isCollegeOT) this.endCollegeOTPossession();
+      else this.kickoffTo(offTeam); // conceding team free-kicks
       this.runClock(result, true, offTeam);
       return {
         text: `SAFETY! ${this.teams[other(offTeam)].abbr} take 2.`,
@@ -215,12 +240,17 @@ export class GameFlow {
       this.distance -= gain;
       if (this.down > 4) {
         // Turnover on downs.
-        this.flipPossession(100 - Math.round(this.ballOn));
+        if (this.isCollegeOT) this.endCollegeOTPossession();
+        else this.flipPossession(100 - Math.round(this.ballOn));
         changed = true;
       }
     }
 
-    this.runClock(result, result.endReason === "incomplete" || result.endReason === "outOfBounds", offTeam);
+    const trueStop = result.endReason === "incomplete" || result.endReason === "outOfBounds";
+    // College stops the clock on first downs to reset the chains, but it winds
+    // again on the ready signal — a brief stop, not the full between-play runoff.
+    const collegeFirstDown = this.rules.clockStopsOnFirstDown && firstDown && !trueStop;
+    this.runClock(result, trueStop, offTeam, collegeFirstDown);
 
     const text = changed
       ? `Turnover on downs. ${this.teams[this.possession].abbr} take over at the ${this.fieldDesc(this.ballOn)}.`
@@ -246,8 +276,11 @@ export class GameFlow {
     const good = this.rng.chance(prob);
     if (good) {
       this.score[offTeam] += 3;
-      this.kickoffTo(other(offTeam));
-      this.runClockSeconds(6, offTeam);
+      if (this.suddenScore()) {
+        return { text: `${fgDist}-yard field goal is GOOD. Ballgame, ${this.teams[offTeam].abbr}.`, scored: true, changedPossession: true, firstDown: false, isScore: { type: "FG", team: offTeam } };
+      }
+      if (this.isCollegeOT) this.endCollegeOTPossession();
+      else { this.kickoffTo(other(offTeam)); this.runClockSeconds(6, offTeam); }
       return {
         text: `${fgDist}-yard field goal is GOOD. ${this.teams[offTeam].abbr} +3.`,
         scored: true,
@@ -256,9 +289,9 @@ export class GameFlow {
         isScore: { type: "FG", team: offTeam },
       };
     }
-    // Miss: opponent takes over at the spot.
-    this.flipPossession(Math.max(20, 100 - this.ballOn));
-    this.runClockSeconds(6, offTeam);
+    // Miss: opponent takes over.
+    if (this.isCollegeOT) this.endCollegeOTPossession();
+    else { this.flipPossession(Math.max(20, 100 - this.ballOn)); this.runClockSeconds(6, offTeam); }
     return {
       text: `${fgDist}-yard field goal is NO GOOD. ${this.teams[this.possession].abbr} take over.`,
       scored: false,
@@ -298,13 +331,18 @@ export class GameFlow {
     let text: string;
     let isScore: CommitOutcome["isScore"] = null;
     if (kind === "two") {
-      const good = this.rng.chance(0.47);
+      const good = this.rng.chance(this.rules.twoPointSuccess);
       if (good) { this.score[team] += 2; isScore = { type: "TWO", team }; }
       text = good ? `Two-point conversion GOOD. ${abbr} +2.` : `Two-point try NO GOOD.`;
     } else {
-      const good = this.rng.chance(0.94);
+      const good = this.rng.chance(this.rules.xpSuccess);
       if (good) { this.score[team] += 1; isScore = { type: "XP", team }; }
       text = good ? `Extra point good.` : `Extra point MISSED.`;
+    }
+    // In overtime the possession is governed by the OT handler (no kickoff).
+    if (this.overtime > 0) {
+      if (this.rules.otType === "college") this.endCollegeOTPossession();
+      return { text, scored: !!isScore, changedPossession: true, firstDown: false, isScore };
     }
     this.kickoffTo(other(team));
     return { text, scored: !!isScore, changedPossession: true, firstDown: false, isScore };
@@ -381,8 +419,9 @@ export class GameFlow {
       if (this.distance <= 0) { this.markFirstDown(); first = true; }
       return { text: `Offside, ${abbr(def)}. ${y} yards${first ? ", first down" : ""}.`, penalizedTeam: def, yards: y, firstDown: first };
     }
-    // Pass interference: spot foul + automatic first down.
-    const y = fwd(15);
+    // Pass interference: pro is a spot foul (can be big); college caps at 15.
+    const piBase = this.rules.piSpotFoul ? Math.round(15 + this.rng.range(0, 28)) : 15;
+    const y = fwd(piBase);
     this.ballOn += y;
     this.markFirstDown();
     return { text: `Pass interference, ${abbr(def)}. ${y} yards, automatic first down.`, penalizedTeam: def, yards: y, firstDown: true };
@@ -411,11 +450,65 @@ export class GameFlow {
     this.distance = 10;
   }
 
-  private runClock(result: PlayResult, clockStops: boolean, chargeTo: TeamId): void {
+  // ---- overtime ----
+
+  private startOvertime(): void {
+    this.overtime = 1;
+    this.quarter = 5;
+    this.twoMinuteFired = false;
+    this.pendingConversion = null;
+    if (this.rules.otType === "college") {
+      this.timeouts = { home: 1, away: 1 };
+      this.otFirstTeam = this.rng.chance(0.5) ? "home" : "away";
+      this.otPoss = 0;
+      this.clock = 0; // untimed
+      this.setCollegeOTBall(this.otFirstTeam);
+    } else {
+      this.timeouts = { home: 2, away: 2 };
+      this.clock = Math.max(60, Math.round(this.cfg.quarterSeconds * (2 / 3)));
+      this.kickoffTo(this.rng.chance(0.5) ? "home" : "away");
+    }
+  }
+
+  /** 1st & 10 from the opponent's 25 (college OT). */
+  private setCollegeOTBall(team: TeamId): void {
+    this.possession = team;
+    this.ballOn = 75;
+    this.down = 1;
+    this.distance = 10;
+    this.pendingConversion = null;
+  }
+
+  /** A college-OT possession ended (score or turnover). Alternate; compare
+   *  after both teams have had the ball; new round if still tied. */
+  private endCollegeOTPossession(): void {
+    this.otPoss++;
+    if (this.otPoss < 2) {
+      this.setCollegeOTBall(other(this.possession));
+      return;
+    }
+    if (this.score.home !== this.score.away) { this.gameOver = true; return; }
+    this.overtime++;
+    this.otPoss = 0;
+    this.otFirstTeam = other(this.otFirstTeam); // loser of the toss goes first next round
+    this.setCollegeOTBall(this.otFirstTeam);
+  }
+
+  /** Sudden-death (pro) OT: the first score wins. Returns true if it ended. */
+  private suddenScore(): boolean {
+    if (this.overtime > 0 && this.rules.otType === "sudden") { this.gameOver = true; return true; }
+    return false;
+  }
+
+  private get isCollegeOT(): boolean {
+    return this.overtime > 0 && this.rules.otType === "college";
+  }
+
+  private runClock(result: PlayResult, clockStops: boolean, chargeTo: TeamId, collegeFirstDown = false): void {
     const stops = clockStops || this.clockStopNext;
     this.clockStopNext = false;
-    const runoff = Math.ceil(result.playTime) + (stops ? 0 : 25);
-    this.runClockSeconds(runoff, chargeTo);
+    const between = stops ? 0 : collegeFirstDown ? 13 : 25;
+    this.runClockSeconds(Math.ceil(result.playTime) + between, chargeTo);
   }
 
   private chargeClock(team: TeamId, sec: number): void {
@@ -424,6 +517,14 @@ export class GameFlow {
 
   private runClockSeconds(sec: number, chargeTo: TeamId = this.possession): void {
     this.top[chargeTo] += sec;
+    if (this.overtime > 0) {
+      if (this.rules.otType === "college") return; // untimed
+      // Sudden-death period: winning is decided at scoring time; if the clock
+      // runs out still tied, it's a tie (pro regular season).
+      this.clock = Math.max(0, this.clock - sec);
+      if (this.clock <= 0) this.gameOver = true;
+      return;
+    }
     this.clock -= sec;
     // Two-minute warning (end of 2nd & 4th quarters).
     if ((this.quarter === 2 || this.quarter === 4) && this.clock <= 120 && !this.twoMinuteFired) {
@@ -432,6 +533,7 @@ export class GameFlow {
     while (this.clock <= 0 && !this.gameOver) {
       if (this.quarter >= 4) {
         this.clock = 0;
+        if (this.score.home === this.score.away) { this.startOvertime(); return; }
         this.gameOver = true;
         return;
       }

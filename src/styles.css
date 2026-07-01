@@ -338,6 +338,7 @@ button.primary.big { width: 100%; font-size: 15px; min-height: 48px; }
 .setup-input.name { flex: 1; }
 .setup-input.abbr { width: 64px; text-transform: uppercase; }
 .setup-input.seed { flex: 1; }
+.team-select { width: 100%; margin-bottom: 8px; font-weight: 600; }
 .setup-color { width: 44px; height: 40px; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); cursor: pointer; }
 .setup-hint { margin: 6px 0 0; font-size: 11px; color: var(--muted); }
 .setup-hint.err { color: #eb5a46; }

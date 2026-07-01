@@ -80,7 +80,7 @@ describe("situational AI", () => {
   const base: GameInfo = {
     quarter: 1, clock: 600, possession: "home", down: 1, distance: 10,
     ballOn: 25, score: { home: 0, away: 0 }, gameOver: false,
-    timeouts: { home: 3, away: 3 }, pendingConversion: null,
+    timeouts: { home: 3, away: 3 }, pendingConversion: null, league: "pro", overtime: 0,
   };
 
   it("always returns plays that exist in the playbook", () => {
