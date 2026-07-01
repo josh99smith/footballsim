@@ -578,9 +578,10 @@ export class GameController {
     const aiTeam: TeamId = info.possession === "home" ? "away" : "home";
 
     if (offenseIsUser) {
-      // User calls offense; AI (defense) is the opponent of the ball carrier.
+      // User calls offense; AI (defense) is the opponent of the ball carrier —
+      // it calls to its own game plan.
       this.callSide = "offense";
-      this.pendingHiddenCall = pickDefense(info, this.aiPhilosophy(), this.flow.rng, this.momentum[aiTeam]);
+      this.pendingHiddenCall = pickDefense(info, this.aiPhilosophy(), this.flow.rng, this.momentum[aiTeam], this.aiGameplan);
       this.aiCallName = null;
       this.buildPreview(OFF_PLAYS[0].id, this.pendingHiddenCall);
     } else {
@@ -593,7 +594,7 @@ export class GameController {
         }
       }
       this.callSide = "defense";
-      this.pendingHiddenCall = pickOffense(info, this.aiPhilosophy(), this.flow.rng, this.momentum[info.possession]);
+      this.pendingHiddenCall = pickOffense(info, this.aiPhilosophy(), this.flow.rng, this.momentum[info.possession], this.aiGameplan);
       this.aiCallName = null;
       this.buildPreview(this.pendingHiddenCall, DEF_PLAYS[0].id);
     }
