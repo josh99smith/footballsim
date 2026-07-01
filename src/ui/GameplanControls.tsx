@@ -28,6 +28,7 @@ export function GameplanControls({
             value={Math.round((value[ax.key] ?? 0) * 100)}
             onChange={(e) => set(ax.key, Number(e.target.value) / 100)}
           />
+          <p className="gp-hint">{ax.hint}</p>
         </div>
       ))}
     </div>

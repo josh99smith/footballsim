@@ -30,6 +30,9 @@ export interface PlaySetup {
   ballY: number;
   /** Yards from the LOS to the offense's target goal line (local +x). */
   yardsToGoal: number;
+  /** Defensive press emphasis (0..1). Tighter early man coverage (a jam) at
+   *  the cost of deep vulnerability (which the lowered CB awareness supplies). */
+  defPress?: number;
   rng: RNG;
 }
 
@@ -617,7 +620,9 @@ export class PlaySim {
     const man = this.byId(tid);
     // Trail with reaction lag scaled by awareness; aim a step toward the QB side.
     const lag = 1 - a.ratings.awareness / 200; // 0.5..1.0
-    const lead = add(man.pos, scale(man.vel, 0.25 * lag));
+    // Press jams the route: the corner mirrors tighter (less lead cushion) early.
+    const press = Math.max(0, this.setup.defPress ?? 0);
+    const lead = add(man.pos, scale(man.vel, 0.25 * lag * (1 - press * 0.6)));
     steer(a, lead, 1);
     if (this.runCommitted()) {
       // Run is live; come up and pursue.
@@ -739,9 +744,14 @@ export class PlaySim {
     }
 
     // Completion odds: accuracy of placement + hands, minus tight coverage.
+    // Hands matter more now, and a contest is only as tough as the defender:
+    // a stud cover man in your face is a near-lock incompletion, a scrub isn't.
+    const covPenalty = contested && nearestDef.agent
+      ? 0.08 + ((nearestDef.agent.ratings.awareness - 65) / 200) * (1 - dDef / 2.0)
+      : 0;
     let catchProb =
-      1.0 - dRec * 0.13 + (target.ratings.catching - 70) / 240 - (contested ? 0.17 : 0);
-    catchProb = clamp(catchProb, 0.05, 0.98);
+      1.0 - dRec * 0.13 + (target.ratings.catching - 70) / 160 - covPenalty;
+    catchProb = clamp(catchProb, 0.03, 0.98);
     if (this.rng.chance(catchProb)) {
       target.hasBall = true;
       this.ball.carrierId = target.id;
@@ -815,7 +825,9 @@ export class PlaySim {
       // Tackle vs break-tackle contest.
       const tackle = def.ratings.tackling + def.ratings.strength;
       const elude = carrier.ratings.strength + carrier.ratings.agility;
-      const breakProb = clamp(0.2 + (elude - tackle) / 500, 0.04, 0.55);
+      // Widened curve: a decisive edge (stud back vs scrub, or vice versa)
+      // swings the break far harder than a coin-flip.
+      const breakProb = clamp(0.18 + (elude - tackle) / 340, 0.02, 0.7);
       if (this.rng.chance(breakProb)) {
         def.beatBlock = true;
         def.blockedUntil = this.tick + 14;

@@ -232,8 +232,63 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .gp-label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
 .gp-lo, .gp-hi { color: var(--text); font-weight: 600; }
 .gp-axis input[type="range"] { width: 100%; height: 26px; accent-color: var(--accent); }
+.gp-hint { margin: 1px 0 0; font-size: 9.5px; line-height: 1.25; color: var(--muted); opacity: 0.72; }
 .gp-summary { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
 .gp-summary b { color: var(--text); }
+
+/* ---- ratings / roster overlay ---- */
+.rv-card { max-width: 560px; }
+.rv-teamtabs { display: flex; gap: 8px; margin-bottom: 10px; }
+.rv-tab {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 8px 6px; background: var(--panel-2); border: 2px solid var(--border);
+  border-radius: 10px; color: var(--muted); cursor: pointer;
+}
+.rv-tab.active { background: var(--panel); color: var(--text); }
+.rv-tab-name { font-size: 13px; font-weight: 700; letter-spacing: 0.5px; }
+.rv-tab-ovr { font-size: 22px; font-weight: 800; line-height: 1; }
+.rv-tab-sub { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7; }
+.rv-caption { margin: 0 0 10px; font-size: 11px; line-height: 1.4; color: var(--muted); }
+.rv-c-up { color: #4ade80; }
+.rv-c-down { color: #f87171; }
+.rv-team { display: flex; flex-direction: column; gap: 12px; }
+.rv-unit { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.rv-unit-title {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px;
+  color: var(--accent-2); font-weight: 700; margin-bottom: 2px;
+}
+.rv-player { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.rv-player-head {
+  width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  background: none; border: none; color: var(--text); cursor: pointer; text-align: left;
+}
+.rv-pos {
+  min-width: 30px; text-align: center; font-size: 10px; font-weight: 800;
+  padding: 2px 4px; border-radius: 4px; background: var(--border); color: var(--text);
+}
+.rv-num { font-size: 11px; color: var(--muted); min-width: 26px; }
+.rv-name { flex: 1; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rv-delta { font-size: 11px; font-weight: 700; }
+.rv-delta.up, .rv-rd.up, .rv-chip.up { color: #4ade80; }
+.rv-delta.down, .rv-rd.down, .rv-chip.down { color: #f87171; }
+.rv-ovr { min-width: 30px; text-align: center; font-size: 17px; font-weight: 800; }
+.ov-elite { color: #fbbf24; }
+.ov-good { color: #4ade80; }
+.ov-mid { color: var(--text); }
+.ov-low { color: var(--muted); }
+.rv-chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 10px 8px; }
+.rv-chip {
+  font-size: 9.5px; font-weight: 700; padding: 1px 5px; border-radius: 4px;
+  background: var(--panel); border: 1px solid var(--border);
+}
+.rv-ratings {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(74px, 1fr));
+  gap: 4px 8px; padding: 0 10px 10px;
+}
+.rv-rating { display: flex; align-items: baseline; gap: 4px; font-size: 12px; }
+.rv-rlbl { font-size: 9px; color: var(--muted); min-width: 24px; letter-spacing: 0.5px; }
+.rv-rval { font-weight: 700; }
+.rv-rd { font-size: 10px; font-weight: 700; }
 
 /* ---- halftime ---- */
 .halftime .overlay-card { max-height: 94%; }
@@ -324,6 +379,7 @@ button.primary.big { width: 100%; font-size: 15px; min-height: 48px; }
   padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
   background: linear-gradient(transparent, var(--panel) 45%);
 }
+.scout-btn { width: 100%; margin-bottom: 8px; font-size: 13px; min-height: 42px; }
 .setup-tagline { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
 .setup-section { margin-bottom: 16px; }
 .setup-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }

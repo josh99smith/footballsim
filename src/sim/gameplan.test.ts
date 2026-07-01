@@ -40,8 +40,23 @@ describe("applyGameplan", () => {
     expect(applyGameplan(R, "DL", rush).strength).toBeGreaterThan(R.strength);
   });
 
+  it("press jams routes: corners gain physicality but lose deep awareness", () => {
+    const press: Gameplan = { ...NEUTRAL_GAMEPLAN, press: 1 };
+    expect(applyGameplan(R, "CB", press).strength).toBeGreaterThan(R.strength);
+    expect(applyGameplan(R, "CB", press).tackling).toBeGreaterThan(R.tackling);
+    expect(applyGameplan(R, "CB", press).awareness).toBeLessThan(R.awareness);
+  });
+
+  it("tempo sharpens skill speed but wears down the line", () => {
+    const fast: Gameplan = { ...NEUTRAL_GAMEPLAN, tempo: 1 };
+    expect(applyGameplan(R, "WR", fast).speed).toBeGreaterThan(R.speed);
+    expect(applyGameplan(R, "OL", fast).blocking).toBeLessThan(R.blocking);
+  });
+
   it("keeps ratings within 1..99", () => {
-    const extreme = applyGameplan({ ...R, catching: 96 }, "WR", { air: 1, explosive: -1, coverage: 0, pressure: 0 });
+    const extreme = applyGameplan({ ...R, catching: 96 }, "WR", {
+      ...NEUTRAL_GAMEPLAN, air: 1, explosive: -1, tempo: 1,
+    });
     for (const v of Object.values(extreme)) {
       expect(v).toBeGreaterThanOrEqual(1);
       expect(v).toBeLessThanOrEqual(99);

@@ -152,6 +152,7 @@ export class GameFlow {
       defRoster: defTeam.defense.map((pl) => ({ ...pl, ratings: applyGameplan(pl.ratings, pl.pos, defPlan) })),
       ballY: FIELD.WIDTH / 2,
       yardsToGoal: 100 - this.ballOn,
+      defPress: defPlan.press,
       rng: this.rng,
     };
     return new PlaySim(setup);
@@ -507,7 +508,11 @@ export class GameFlow {
   private runClock(result: PlayResult, clockStops: boolean, chargeTo: TeamId, collegeFirstDown = false): void {
     const stops = clockStops || this.clockStopNext;
     this.clockStopNext = false;
-    const between = stops ? 0 : collegeFirstDown ? 13 : 25;
+    // Tempo bends the between-play runoff: no-huddle (+) snaps it fast, milking
+    // (-) drains toward the play clock. Only the running-clock gap is affected.
+    const tempo = this.gameplans[chargeTo]?.tempo ?? 0;
+    const base = collegeFirstDown ? 13 : 25;
+    const between = stops ? 0 : Math.round(Math.max(6, Math.min(40, base * (1 - tempo * 0.55))));
     this.runClockSeconds(Math.ceil(result.playTime) + between, chargeTo);
   }
 
