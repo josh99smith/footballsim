@@ -346,9 +346,11 @@ export class PlaySim {
       target = v(a.pos.x + 6, clamp(aim + lateral * 0.6, 2, FIELD.WIDTH - 2));
     } else {
       // Past the line / after the catch: attack downfield in stride, sliding
-      // off tacklers. Open grass lets a fast carrier lengthen his stride.
+      // off tacklers. A carrier runs near his own top speed — NOT faster than
+      // the pursuit, so equal-speed defenders can still run him down on an angle
+      // (only a genuine speed edge or a missed tackle springs a house call).
       const open = !nd || d > seeThreat;
-      burst = open ? 1.06 + a.ratings.speed / 1600 : 1.05;
+      burst = open ? 0.97 : 0.95;
       target = v(a.pos.x + 10, clamp(a.pos.y + lateral, 2, FIELD.WIDTH - 2));
     }
     steer(a, target, burst);
@@ -557,8 +559,9 @@ export class PlaySim {
     let hang = flight / throwSpeed;
     // Lead the receiver to where they'll be.
     const lead = add(target.pos, scale(target.vel, hang));
-    // Accuracy error grows with depth and falls with QB awareness.
-    const errScale = (0.35 + flight / 55) * (1.2 - qb.ratings.awareness / 140);
+    // Accuracy error grows sharply with depth and falls with QB awareness, so a
+    // deep bomb is a genuine low-percentage shot, not a gimme.
+    const errScale = (0.35 + flight / 40) * (1.3 - qb.ratings.awareness / 130);
     const err = v(this.rng.gaussian() * errScale, this.rng.gaussian() * errScale);
     const land = add(lead, err);
     // Allow the ball to sail just past the sideline: an errant out-breaking
@@ -684,20 +687,38 @@ export class PlaySim {
       steer(a, this.ballSpotForPursuit(), 0.97);
       return;
     }
-    // Find the most threatening receiver in the zone and squeeze.
+    // Deep zones (thirds / halves / deep middle) play over the top and own a
+    // whole LATERAL BAND — a route breaking for the sideline is still theirs.
+    const isDeep = a.assignment.kind === "coverZone" && a.assignment.center.x >= 14;
     let threat: Agent | null = null;
-    let bestD = radius;
-    for (const o of this.agents) {
-      if (o.side !== "off" || o.assignment.kind !== "runRoute") continue;
-      const d = dist(o.pos, center);
-      if (d < bestD) {
-        bestD = d;
-        threat = o;
+    if (isDeep) {
+      // Carry the DEEPEST receiver whose lateral spot falls in this zone's band
+      // (so a go to the numbers/sideline gets carried, not abandoned).
+      const band = radius * 1.35;
+      let deepest = 1;
+      for (const o of this.agents) {
+        if (o.side !== "off" || o.assignment.kind !== "runRoute") continue;
+        if (Math.abs(o.pos.y - center.y) > band) continue;
+        if (o.pos.x > deepest) { deepest = o.pos.x; threat = o; }
+      }
+    } else {
+      let bestD = radius;
+      for (const o of this.agents) {
+        if (o.side !== "off" || o.assignment.kind !== "runRoute") continue;
+        const d = dist(o.pos, center);
+        if (d < bestD) { bestD = d; threat = o; }
       }
     }
     if (threat) {
-      const lead = add(threat.pos, scale(threat.vel, 0.3));
-      steer(a, lead, 0.95);
+      if (isDeep) {
+        // Stay on top: match the receiver laterally, hold a cushion downfield so
+        // he can't get behind, and run full speed to carry the vertical.
+        const overTop = Math.max(threat.pos.x + 2.8, a.pos.x);
+        steer(a, v(overTop, threat.pos.y), 1);
+      } else {
+        const lead = add(threat.pos, scale(threat.vel, 0.3));
+        steer(a, lead, 0.95);
+      }
     } else {
       steer(a, center, dist(a.pos, center) < 1 ? 0 : 0.8);
     }
@@ -825,8 +846,12 @@ export class PlaySim {
     const covPenalty = contested && nearestDef.agent
       ? 0.08 + ((nearestDef.agent.ratings.awareness - 65) / 200) * (1 - dDef / 2.0)
       : 0;
+    // Depth penalty (quadratic): quick throws stay easy, but a real shot down
+    // the field is low-percentage even a step open — timing, trajectory, contest.
+    const overDepth = Math.max(0, this.airYards - 10);
+    const depthPenalty = (overDepth * overDepth) / 2200;
     let catchProb =
-      1.0 - dRec * 0.13 + (target.ratings.catching - 70) / 160 - covPenalty;
+      1.0 - dRec * 0.13 + (target.ratings.catching - 70) / 160 - covPenalty - depthPenalty;
     catchProb = clamp(catchProb, 0.03, 0.98);
     if (this.rng.chance(catchProb)) {
       target.hasBall = true;
